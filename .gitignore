@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+dist/
+*.pyc
+*.log
+__pycache__/
+.env
+.env.local
+.venv/
+backend/.venv/
+frontend/.vercel/
