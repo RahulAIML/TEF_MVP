@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import re
 from threading import Lock
 from typing import Any, Dict, List, Optional
@@ -19,6 +20,20 @@ API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 _cache_lock = Lock()
 _last_exercise: Optional[ReadingExerciseResponse] = None
+_last_domain: Optional[str] = None
+
+DOMAINS = [
+  "culture and arts",
+  "travel and geography",
+  "history",
+  "daily life and routines",
+  "science and innovation",
+  "health and wellness",
+  "education",
+  "business and careers",
+  "environment and sustainability",
+  "cuisine and food culture"
+]
 
 
 def _ensure_api_key() -> None:
@@ -89,9 +104,21 @@ def _normalize_question(question_payload: Dict[str, Any]) -> Dict[str, Any]:
     "explanation": str(question_payload.get("explanation", "")).strip()
   }
 
+def _pick_domain() -> str:
+  global _last_domain
+  choices = [domain for domain in DOMAINS if domain != _last_domain]
+  if not choices:
+    choices = DOMAINS[:]
+  selected = random.choice(choices)
+  _last_domain = selected
+  return selected
+
 
 def generate_reading_exercise() -> ReadingExerciseResponse:
-  prompt = """
+  last_error: Optional[Exception] = None
+  for attempt in range(1, 6):
+    domain = _pick_domain()
+    prompt = f"""
 Generate a TEF Canada B2 reading comprehension exercise.
 
 Return JSON containing:
@@ -114,40 +141,42 @@ vocabulary in context
 Strict requirements:
 - Passage language must be French.
 - Passage length: between 250 and 300 words.
-- Topic should be one of: society, work, environment, technology.
+- Domain: {domain}. The title and passage must clearly reflect this domain.
+- Avoid other domains in the passage so the topic feels focused.
 - Options should be plausible and clearly distinct.
 - correct_answer must be one of: A, B, C, D.
 - Output must be valid JSON only (no markdown, no commentary).
 - Use this exact JSON shape:
-{
+{{
   "title": "string",
   "passage": "string",
   "questions": [
-    {
+    {{
       "question": "string",
       "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
       "correct_answer": "A",
       "explanation": "string"
-    }
+    }}
   ]
-}
+}}
 """
 
-  payload = _generate_json(prompt, temperature=0.85)
-  payload["questions"] = [
-    _normalize_question(question)
-    for question in payload.get("questions", [])
-  ]
+    try:
+      payload = _generate_json(prompt, temperature=0.85)
+      payload["questions"] = [
+        _normalize_question(question)
+        for question in payload.get("questions", [])
+      ]
+      exercise = ReadingExerciseResponse.model_validate(payload)
+      set_last_exercise(exercise)
+      return exercise
+    except Exception as error:
+      last_error = error
+      continue
 
-  try:
-    exercise = ReadingExerciseResponse.model_validate(payload)
-  except ValidationError as validation_error:
-    raise RuntimeError(
-      f"Gemini response validation failed for reading exercise: {validation_error}"
-    ) from validation_error
-
-  set_last_exercise(exercise)
-  return exercise
+  raise RuntimeError(
+    f"Gemini response validation failed after 5 attempts: {last_error}"
+  ) from last_error
 
 
 def explain_word(word: str) -> WordMeaningResponse:
