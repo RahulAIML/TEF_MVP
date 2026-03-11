@@ -12,3 +12,11 @@ export interface ReadingExercise {
   passage: string;
   questions: ReadingQuestion[];
 }
+
+export type ReadingMode = "exam" | "practice";
+export type ReadingPart = 1 | 2 | 3;
+
+export interface GenerateReadingRequest {
+  mode: ReadingMode;
+  part: ReadingPart;
+}

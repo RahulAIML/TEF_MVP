@@ -5,29 +5,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 interface ReadingPanelProps {
   title: string;
   passage: string;
-  onWordHighlight?: (word: string) => void;
+  onTextHighlight?: (text: string) => void;
 }
 
-function pickFirstWord(rawSelection: string): string {
-  const cleaned = rawSelection
-    .trim()
-    .replace(/[.,!?;:()[\]{}"'`~<>«»]/g, " ")
-    .split(/\s+/)
-    .filter(Boolean)[0];
-
-  return cleaned ?? "";
+function normalizeSelection(rawSelection: string): string {
+  return rawSelection.replace(/\s+/g, " ").trim();
 }
 
 export default function ReadingPanel({
   title,
   passage,
-  onWordHighlight
+  onTextHighlight
 }: ReadingPanelProps) {
   const handleMouseUp = () => {
     const selection = window.getSelection()?.toString() ?? "";
-    const chosenWord = pickFirstWord(selection);
-    if (chosenWord && onWordHighlight) {
-      onWordHighlight(chosenWord);
+    const chosenText = normalizeSelection(selection);
+    if (chosenText && onTextHighlight) {
+      onTextHighlight(chosenText);
     }
   };
 
@@ -36,7 +30,7 @@ export default function ReadingPanel({
       <CardHeader>
         <CardTitle className="text-slate-900">{title}</CardTitle>
         <CardDescription>
-          Select a word in the passage to auto-fill the helper on the right.
+          Select text in the passage to auto-fill the helper on the right.
         </CardDescription>
       </CardHeader>
       <CardContent>

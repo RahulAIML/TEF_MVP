@@ -34,6 +34,11 @@ class ReadingExerciseResponse(BaseModel):
     return questions
 
 
+class GenerateReadingRequest(BaseModel):
+  mode: Literal["exam", "practice"]
+  part: Literal[1, 2, 3]
+
+
 class WordMeaningRequest(BaseModel):
   word: str = Field(min_length=1, max_length=60)
 
@@ -75,3 +80,7 @@ class SubmissionResponse(BaseModel):
   score: int
   total: int
   results: List[SubmissionResultItem]
+
+
+class SpeechToTextResponse(BaseModel):
+  transcript: str

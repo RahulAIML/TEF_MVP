@@ -10,6 +10,7 @@ interface MCQQuestionProps {
   question: ReadingQuestion;
   selectedAnswer: AnswerOption | "";
   onAnswerChange: (answer: AnswerOption) => void;
+  isDisabled?: boolean;
 }
 
 function parseOption(option: string, fallbackIndex: number) {
@@ -29,7 +30,8 @@ export default function MCQQuestion({
   index,
   question,
   selectedAnswer,
-  onAnswerChange
+  onAnswerChange,
+  isDisabled
 }: MCQQuestionProps) {
   return (
     <Card className="border-slate-200">
@@ -41,6 +43,7 @@ export default function MCQQuestion({
           value={selectedAnswer}
           onValueChange={(value) => onAnswerChange(value as AnswerOption)}
           className="gap-3"
+          disabled={isDisabled}
         >
           {question.options.map((option, optionIndex) => {
             const parsed = parseOption(option, optionIndex);
@@ -50,8 +53,13 @@ export default function MCQQuestion({
                 key={id}
                 className="flex items-start gap-3 rounded-md border border-slate-200 bg-white px-3 py-2.5"
               >
-                <RadioGroupItem value={parsed.letter} id={id} />
-                <Label htmlFor={id} className="cursor-pointer text-sm font-normal leading-relaxed">
+                <RadioGroupItem value={parsed.letter} id={id} disabled={isDisabled} />
+                <Label
+                  htmlFor={id}
+                  className={`text-sm font-normal leading-relaxed ${
+                    isDisabled ? "cursor-not-allowed text-slate-400" : "cursor-pointer"
+                  }`}
+                >
                   <span className="mr-2 font-semibold text-slate-900">{parsed.letter}.</span>
                   <span>{parsed.label}</span>
                 </Label>

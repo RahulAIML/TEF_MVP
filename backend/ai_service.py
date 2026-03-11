@@ -114,7 +114,15 @@ def _pick_domain() -> str:
   return selected
 
 
-def generate_reading_exercise() -> ReadingExerciseResponse:
+def generate_reading_exercise(
+  mode: str = "practice",
+  part: int = 1
+) -> ReadingExerciseResponse:
+  if part not in {1, 2, 3}:
+    raise RuntimeError("part must be 1, 2, or 3.")
+  if mode not in {"exam", "practice"}:
+    raise RuntimeError("mode must be 'exam' or 'practice'.")
+
   last_error: Optional[Exception] = None
   for attempt in range(1, 6):
     domain = _pick_domain()
@@ -141,6 +149,8 @@ vocabulary in context
 Strict requirements:
 - Passage language must be French.
 - Passage length: between 250 and 300 words.
+- Mode: {mode}.
+- Exam part: {part}.
 - Domain: {domain}. The title and passage must clearly reflect this domain.
 - Avoid other domains in the passage so the topic feels focused.
 - Options should be plausible and clearly distinct.

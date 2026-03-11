@@ -7,16 +7,15 @@ import { Button } from "@/components/ui/button";
 interface HeaderProps {
   isGenerating: boolean;
   onGenerate: () => void;
+  actionLabel?: string;
 }
 
-export default function Header({ isGenerating, onGenerate }: HeaderProps) {
+export default function Header({ isGenerating, onGenerate, actionLabel }: HeaderProps) {
   return (
     <header className="sticky top-0 z-20 border-b border-border/70 bg-background/95 backdrop-blur">
       <div className="container flex items-center justify-between py-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-            TEF Reading Practice
-          </h1>
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">TEF Reading Trainer</h1>
           <p className="text-sm text-muted-foreground">
             B2 reading comprehension with instant feedback
           </p>
@@ -28,7 +27,7 @@ export default function Header({ isGenerating, onGenerate }: HeaderProps) {
               Generating...
             </>
           ) : (
-            "Generate Reading Exercise"
+            actionLabel ?? "Generate Reading Exercise"
           )}
         </Button>
       </div>

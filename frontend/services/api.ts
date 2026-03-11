@@ -1,5 +1,5 @@
 import type { WordMeaningRequest, WordMeaningResponse } from "@/types/dictionary";
-import type { ReadingExercise } from "@/types/reading";
+import type { GenerateReadingRequest, ReadingExercise } from "@/types/reading";
 import type { SubmitReadingRequest, SubmissionResponse } from "@/types/submission";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -12,9 +12,13 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function generateReadingExercise(): Promise<ReadingExercise> {
-  const res = await fetch(`${API_BASE_URL}/generate-reading-exercise`, {
-    method: "GET",
+export async function generateReadingExercise(
+  payload: GenerateReadingRequest
+): Promise<ReadingExercise> {
+  const res = await fetch(`${API_BASE_URL}/generate-reading`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
     cache: "no-store"
   });
   return parseResponse<ReadingExercise>(res);
