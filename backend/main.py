@@ -4,9 +4,12 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from database import init_db
 from routers.dictionary import router as dictionary_router
-from routers.reading import router as reading_router
-from routers.submission import router as submission_router
+from routers.auth_routes import router as auth_router
+from routers.exam_routes import router as exam_router
+from routers.passage_routes import router as passage_router
+from routers.performance_routes import router as performance_router
 
 load_dotenv()
 
@@ -16,12 +19,16 @@ configured_origins = [
   origin.strip()
   for origin in os.getenv(
     "FRONTEND_ORIGIN",
-    "http://localhost:3000,http://localhost:3001"
+    "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000"
   ).split(",")
   if origin.strip()
 ]
 frontend_origins = sorted(
-  set(configured_origins).union({"http://localhost:3000", "http://localhost:3001"})
+  set(configured_origins).union({
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000"
+  })
 )
 app.add_middleware(
   CORSMiddleware,
@@ -31,9 +38,16 @@ app.add_middleware(
   allow_headers=["*"]
 )
 
-app.include_router(reading_router)
 app.include_router(dictionary_router)
-app.include_router(submission_router)
+app.include_router(exam_router)
+app.include_router(passage_router)
+app.include_router(performance_router)
+app.include_router(auth_router)
+
+
+@app.on_event("startup")
+async def on_startup() -> None:
+  init_db()
 
 
 @app.get("/")

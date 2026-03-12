@@ -5,6 +5,7 @@ export interface ReadingQuestion {
   options: string[];
   correct_answer: AnswerOption;
   explanation: string;
+  question_type: "main_idea" | "detail" | "inference" | "vocabulary";
 }
 
 export interface ReadingExercise {

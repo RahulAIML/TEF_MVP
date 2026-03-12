@@ -1,6 +1,14 @@
 import type { WordMeaningRequest, WordMeaningResponse } from "@/types/dictionary";
-import type { GenerateReadingRequest, ReadingExercise } from "@/types/reading";
-import type { SubmitReadingRequest, SubmissionResponse } from "@/types/submission";
+import type {
+  ExamQuestion,
+  GenerateQuestionRequest,
+  SubmitExamRequest,
+  SubmitExamResponse
+} from "@/types/exam";
+import type { DashboardSummaryResponse } from "@/types/dashboard";
+import type { PassageResponse } from "@/types/passage";
+import type { AuthResponse, LoginRequest, SignupRequest } from "@/types/user";
+import { getAuthToken } from "@/lib/auth";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -12,16 +20,60 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function generateReadingExercise(
-  payload: GenerateReadingRequest
-): Promise<ReadingExercise> {
-  const res = await fetch(`${API_BASE_URL}/generate-reading`, {
+function authHeaders() {
+  const token = getAuthToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function signupUser(payload: SignupRequest): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/signup`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
     cache: "no-store"
   });
-  return parseResponse<ReadingExercise>(res);
+  return parseResponse<AuthResponse>(res);
+}
+
+export async function loginUser(payload: LoginRequest): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<AuthResponse>(res);
+}
+
+export async function generateQuestion(
+  payload: GenerateQuestionRequest
+): Promise<ExamQuestion> {
+  const res = await fetch(`${API_BASE_URL}/generate-question`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<ExamQuestion>(res);
+}
+
+export async function submitExam(payload: SubmitExamRequest): Promise<SubmitExamResponse> {
+  const res = await fetch(`${API_BASE_URL}/submit-exam`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<SubmitExamResponse>(res);
+}
+
+export async function generatePassage(): Promise<PassageResponse> {
+  const res = await fetch(`${API_BASE_URL}/generate-passage`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    cache: "no-store"
+  });
+  return parseResponse<PassageResponse>(res);
 }
 
 export async function explainWord(
@@ -29,21 +81,18 @@ export async function explainWord(
 ): Promise<WordMeaningResponse> {
   const res = await fetch(`${API_BASE_URL}/word-meaning`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(payload),
     cache: "no-store"
   });
   return parseResponse<WordMeaningResponse>(res);
 }
 
-export async function submitReadingAnswers(
-  payload: SubmitReadingRequest
-): Promise<SubmissionResponse> {
-  const res = await fetch(`${API_BASE_URL}/submit-reading`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+export async function getDashboardSummary(): Promise<DashboardSummaryResponse> {
+  const res = await fetch(`${API_BASE_URL}/dashboard/summary`, {
+    method: "GET",
+    headers: { ...authHeaders() },
     cache: "no-store"
   });
-  return parseResponse<SubmissionResponse>(res);
+  return parseResponse<DashboardSummaryResponse>(res);
 }

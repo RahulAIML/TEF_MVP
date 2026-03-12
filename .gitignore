@@ -10,3 +10,4 @@ __pycache__/
 .venv/
 backend/.venv/
 frontend/.vercel/
+backend/tef.db
