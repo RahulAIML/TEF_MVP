@@ -22,8 +22,7 @@ Full‑stack platform for TEF Canada Reading preparation. It includes a complete
 - Weakest question type
 
 ### Authentication
-- JWT auth (signup/login) available
-- Demo mode works without login (a demo user is created automatically)
+- Demo mode enabled (no signup/login required)
 
 ## Tech Stack
 

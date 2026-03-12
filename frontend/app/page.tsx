@@ -44,6 +44,9 @@ export default function HomePage() {
             </Card>
           ))}
         </div>
+        <p className="text-sm text-slate-500">
+          Demo mode: login is disabled for now.
+        </p>
       </main>
     </div>
   );

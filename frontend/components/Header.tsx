@@ -34,7 +34,7 @@ export default function Header({ title, subtitle }: HeaderProps) {
             </Link>
           </nav>
           <Button asChild size="sm" variant="secondary">
-            <Link href="/signup">Create Account (Optional)</Link>
+            <Link href="/mock-exam">Start Training</Link>
           </Button>
         </div>
       </div>
