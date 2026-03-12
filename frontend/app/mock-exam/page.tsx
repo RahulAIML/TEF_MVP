@@ -45,6 +45,10 @@ export default function MockExamPage() {
     if (showLoader) {
       setLoadingQuestion(true);
     }
+    const shouldResumeTimer = timerActive;
+    if (shouldResumeTimer) {
+      setTimerActive(false);
+    }
     try {
       const question = await generateQuestion({ question_number: questionNumber });
       const updated = { ...questionsRef.current, [questionNumber]: question };
@@ -54,6 +58,9 @@ export default function MockExamPage() {
     } finally {
       if (showLoader) {
         setLoadingQuestion(false);
+      }
+      if (shouldResumeTimer && !timeUp && !results) {
+        setTimerActive(true);
       }
     }
   };
