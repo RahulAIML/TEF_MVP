@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ai_service import generate_exam_question
-from auth import get_current_user
+from auth import get_optional_user
 from database import get_db
 from models import ExamAttempt, User
 from schemas import (
@@ -22,7 +22,7 @@ router = APIRouter(tags=["exam"])
 @router.post("/generate-question", response_model=GenerateQuestionResponse)
 async def post_generate_question(
   payload: GenerateQuestionRequest,
-  _user: User = Depends(get_current_user)
+  _user: User = Depends(get_optional_user)
 ) -> GenerateQuestionResponse:
   try:
     question = generate_exam_question(payload.question_number)
@@ -39,7 +39,7 @@ async def post_generate_question(
 async def post_submit_exam(
   payload: SubmitExamRequest,
   db: Session = Depends(get_db),
-  user: User = Depends(get_current_user)
+  user: User = Depends(get_optional_user)
 ) -> SubmitExamResponse:
   if payload.completed_at < payload.started_at:
     raise HTTPException(status_code=400, detail="completed_at must be after started_at.")

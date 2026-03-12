@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-
 import Header from "@/components/Header";
 import ExamContainer from "@/components/ExamContainer";
 import ExamResults from "@/components/ExamResults";
@@ -12,15 +10,12 @@ import TimerClock from "@/components/TimerClock";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { generateQuestion, submitExam } from "@/services/api";
-import { getAuthToken } from "@/lib/auth";
 import type { AnswerOption, ExamQuestion, SubmitExamResponse } from "@/types/exam";
 
 const TOTAL_QUESTIONS = 40;
 const EXAM_DURATION_SECONDS = 60 * 60;
 
 export default function MockExamPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(1);
   const [questions, setQuestions] = useState<Record<number, ExamQuestion>>({});
@@ -41,13 +36,6 @@ export default function MockExamPage() {
     questionsRef.current = questions;
   }, [questions]);
 
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace("/login");
-      return;
-    }
-    setReady(true);
-  }, [router]);
 
   const ensureQuestion = async (questionNumber: number, showLoader = true) => {
     const existing = questionsRef.current[questionNumber];
@@ -158,10 +146,6 @@ export default function MockExamPage() {
 
   const currentQuestionData = questions[currentQuestion];
   const currentAnswer = answers[currentQuestion] ?? "";
-
-  if (!ready) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen">

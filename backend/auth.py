@@ -11,15 +11,13 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-JWT_SECRET = os.getenv("JWT_SECRET", "")
+JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_change_me")
 JWT_ALGORITHM = "HS256"
 TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 
-if not JWT_SECRET:
-  raise RuntimeError("JWT_SECRET is not set.")
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 auth_scheme = HTTPBearer()
+optional_auth_scheme = HTTPBearer(auto_error=False)
 
 
 def hash_password(password: str) -> str:
@@ -53,5 +51,42 @@ def get_current_user(
   user = db.query(User).filter(User.email == subject).first()
   if not user:
     raise HTTPException(status_code=401, detail="User not found.")
+
+  return user
+
+
+def _get_or_create_demo_user(db: Session) -> User:
+  demo_email = "demo@tef.local"
+  user = db.query(User).filter(User.email == demo_email).first()
+  if user:
+    return user
+
+  user = User(email=demo_email, password_hash=hash_password("demo_pass_123"))
+  db.add(user)
+  db.commit()
+  db.refresh(user)
+  return user
+
+
+def get_optional_user(
+  credentials: HTTPAuthorizationCredentials | None = Depends(optional_auth_scheme),
+  db: Session = Depends(get_db)
+) -> User:
+  if credentials is None:
+    return _get_or_create_demo_user(db)
+
+  token = credentials.credentials
+  try:
+    payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    subject: Optional[str] = payload.get("sub")
+  except JWTError:
+    return _get_or_create_demo_user(db)
+
+  if not subject:
+    return _get_or_create_demo_user(db)
+
+  user = db.query(User).filter(User.email == subject).first()
+  if not user:
+    return _get_or_create_demo_user(db)
 
   return user

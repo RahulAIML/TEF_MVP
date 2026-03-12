@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 import Header from "@/components/Header";
 import { Card, CardContent } from "@/components/ui/card";
-import { getAuthToken } from "@/lib/auth";
 
 const modules = [
   {
@@ -26,53 +24,26 @@ const modules = [
 ];
 
 export default function HomePage() {
-  const [isAuthed, setIsAuthed] = useState(false);
-
-  useEffect(() => {
-    setIsAuthed(Boolean(getAuthToken()));
-  }, []);
-
   return (
     <div className="min-h-screen">
       <Header subtitle="Choose a module to start training" />
       <main className="container space-y-6 py-8">
-        {!isAuthed && (
-          <Card className="border-slate-200 shadow-soft">
-            <CardContent className="p-6">
-              <h2 className="text-xl font-semibold text-slate-900">Login required</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Please log in to access your mock exams, passage analyzer, and dashboard.
-              </p>
-              <div className="mt-4 flex gap-3 text-sm">
-                <Link className="font-medium text-slate-900 underline" href="/login">
-                  Login
+        <div className="grid gap-6 md:grid-cols-3">
+          {modules.map((module) => (
+            <Card key={module.title} className="border-slate-200 shadow-soft">
+              <CardContent className="p-6">
+                <h3 className="text-lg font-semibold text-slate-900">{module.title}</h3>
+                <p className="mt-2 text-sm text-slate-600">{module.description}</p>
+                <Link
+                  href={module.href}
+                  className="mt-4 inline-flex text-sm font-medium text-slate-900 underline"
+                >
+                  Open module
                 </Link>
-                <Link className="font-medium text-slate-900 underline" href="/signup">
-                  Create account
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {isAuthed && (
-          <div className="grid gap-6 md:grid-cols-3">
-            {modules.map((module) => (
-              <Card key={module.title} className="border-slate-200 shadow-soft">
-                <CardContent className="p-6">
-                  <h3 className="text-lg font-semibold text-slate-900">{module.title}</h3>
-                  <p className="mt-2 text-sm text-slate-600">{module.description}</p>
-                  <Link
-                    href={module.href}
-                    className="mt-4 inline-flex text-sm font-medium text-slate-900 underline"
-                  >
-                    Open module
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </main>
     </div>
   );

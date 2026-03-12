@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-
 import Header from "@/components/Header";
 import DictionaryCard from "@/components/DictionaryCard";
 import ReadingPanel from "@/components/ReadingPanel";
@@ -10,13 +8,10 @@ import TextHelperTool from "@/components/TextHelperTool";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { explainWord, generatePassage } from "@/services/api";
-import { getAuthToken } from "@/lib/auth";
 import type { WordMeaningResponse } from "@/types/dictionary";
 import type { PassageResponse } from "@/types/passage";
 
 export default function PassageAnalyzerPage() {
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [passage, setPassage] = useState<PassageResponse | null>(null);
   const [lookupText, setLookupText] = useState("");
   const [wordDetails, setWordDetails] = useState<WordMeaningResponse | null>(null);
@@ -24,13 +19,6 @@ export default function PassageAnalyzerPage() {
   const [loadingHelper, setLoadingHelper] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!getAuthToken()) {
-      router.replace("/login");
-      return;
-    }
-    setReady(true);
-  }, [router]);
 
   const handleGeneratePassage = async () => {
     setLoadingPassage(true);
@@ -62,10 +50,6 @@ export default function PassageAnalyzerPage() {
       setLoadingHelper(false);
     }
   };
-
-  if (!ready) {
-    return null;
-  }
 
   return (
     <div className="min-h-screen">

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
+from auth import get_optional_user
 from database import get_db
 from models import ExamAttempt, User
 from schemas import DashboardSummaryResponse, RecentExam
@@ -23,7 +23,7 @@ QUESTION_TYPE_LABELS = {
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
   db: Session = Depends(get_db),
-  user: User = Depends(get_current_user)
+  user: User = Depends(get_optional_user)
 ) -> DashboardSummaryResponse:
   average_accuracy = db.query(func.coalesce(func.avg(ExamAttempt.accuracy), 0)).filter(
     ExamAttempt.user_id == user.id
