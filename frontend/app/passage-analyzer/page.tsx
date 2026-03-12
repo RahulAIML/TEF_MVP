@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Header from "@/components/Header";
 import DictionaryCard from "@/components/DictionaryCard";
 import ReadingPanel from "@/components/ReadingPanel";
