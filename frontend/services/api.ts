@@ -20,7 +20,7 @@ async function parseResponse<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-function authHeaders() {
+function authHeaders(): HeadersInit {
   const token = getAuthToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
