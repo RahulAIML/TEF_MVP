@@ -63,14 +63,17 @@ export default function MockExamPage() {
       return;
     }
     setIsExamStarted(true);
-    setStartedAt(new Date().toISOString());
-    setTimerKey((prev) => prev + 1);
-    setTimerActive(true);
     setTimeUp(false);
+    setError("");
+    setSubmitNote("");
     try {
       await ensureQuestion(1);
+      setStartedAt(new Date().toISOString());
+      setTimerKey((prev) => prev + 1);
+      setTimerActive(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to generate question.");
+      setIsExamStarted(false);
     }
   };
 

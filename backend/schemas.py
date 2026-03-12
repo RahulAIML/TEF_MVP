@@ -86,6 +86,33 @@ class PassageResponse(BaseModel):
   passage: str
 
 
+class PassageQuizQuestion(BaseModel):
+  question: str
+  options: List[str] = Field(default_factory=list)
+  correct_answer: AnswerOption
+  explanation: str
+
+  @field_validator("options")
+  @classmethod
+  def validate_options(cls, options: List[str]) -> List[str]:
+    if len(options) != 4:
+      raise ValueError("Each question must contain exactly 4 options.")
+    return options
+
+
+class PassageQuizResponse(BaseModel):
+  title: str
+  passage: str
+  questions: List[PassageQuizQuestion]
+
+  @field_validator("questions")
+  @classmethod
+  def validate_question_count(cls, questions: List[PassageQuizQuestion]) -> List[PassageQuizQuestion]:
+    if len(questions) != 10:
+      raise ValueError("Passage quiz must contain exactly 10 questions.")
+    return questions
+
+
 class WordMeaningRequest(BaseModel):
   word: str = Field(min_length=1, max_length=120)
 

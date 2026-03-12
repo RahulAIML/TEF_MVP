@@ -6,7 +6,7 @@ import type {
   SubmitExamResponse
 } from "@/types/exam";
 import type { DashboardSummaryResponse } from "@/types/dashboard";
-import type { PassageResponse } from "@/types/passage";
+import type { PassageQuizResponse, PassageResponse } from "@/types/passage";
 import type { AuthResponse, LoginRequest, SignupRequest } from "@/types/user";
 import { getAuthToken } from "@/lib/auth";
 
@@ -74,6 +74,15 @@ export async function generatePassage(): Promise<PassageResponse> {
     cache: "no-store"
   });
   return parseResponse<PassageResponse>(res);
+}
+
+export async function generatePassageQuiz(): Promise<PassageQuizResponse> {
+  const res = await fetch(`${API_BASE_URL}/generate-passage-quiz`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    cache: "no-store"
+  });
+  return parseResponse<PassageQuizResponse>(res);
 }
 
 export async function explainWord(

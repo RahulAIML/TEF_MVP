@@ -10,7 +10,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from schemas import ExamQuestion, PassageResponse, WordMeaningResponse
+from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMeaningResponse
 
 load_dotenv()
 
@@ -112,6 +112,25 @@ def _normalize_exam_question(payload: Dict[str, Any], question_type: str) -> Dic
   }
 
 
+def _normalize_passage_question(payload: Dict[str, Any]) -> Dict[str, Any]:
+  options_raw = payload.get("options", [])
+  options = [str(item) for item in options_raw][:4]
+  while len(options) < 4:
+    options.append("Option missing")
+  options = [_normalize_option(option, index) for index, option in enumerate(options)]
+
+  raw_answer = str(payload.get("correct_answer", "")).strip().upper()
+  answer_match = re.match(r"([A-D])", raw_answer)
+  normalized_answer = answer_match.group(1) if answer_match else "A"
+
+  return {
+    "question": str(payload.get("question", "")).strip(),
+    "options": options,
+    "correct_answer": normalized_answer,
+    "explanation": str(payload.get("explanation", "")).strip()
+  }
+
+
 def _pick_domain() -> str:
   global _last_domain
   choices = [domain for domain in DOMAINS if domain != _last_domain]
@@ -210,6 +229,61 @@ Rules:
     raise RuntimeError(
       f"Gemini response validation failed for passage generation: {validation_error}"
     ) from validation_error
+
+
+def generate_passage_quiz() -> PassageQuizResponse:
+  domain = _pick_domain()
+  prompt = f"""
+Generate a TEF Canada B2 reading passage in French with 10 comprehension questions.
+
+Return JSON with:
+title
+passage
+questions (array of 10)
+
+Each question must include:
+question
+4 options
+correct_answer
+explanation
+
+Rules:
+- Passage length: 250 to 350 words.
+- Domain: {domain}. Keep the topic focused on this domain.
+- Questions must be based on the passage content.
+- correct_answer must be one of A, B, C, D.
+- Output valid JSON only (no markdown, no commentary).
+- Use this exact JSON shape:
+{{
+  "title": "string",
+  "passage": "string",
+  "questions": [
+    {{
+      "question": "string",
+      "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
+      "correct_answer": "A",
+      "explanation": "string"
+    }}
+  ]
+}}
+"""
+
+  last_error: Exception | None = None
+  for _ in range(5):
+    try:
+      payload = _generate_json(prompt, temperature=0.85)
+      payload["questions"] = [
+        _normalize_passage_question(question)
+        for question in payload.get("questions", [])
+      ]
+      return PassageQuizResponse.model_validate(payload)
+    except Exception as error:
+      last_error = error
+      continue
+
+  raise RuntimeError(
+    f"Gemini response validation failed for passage quiz after retries: {last_error}"
+  ) from last_error
 
 
 def explain_word(word: str) -> WordMeaningResponse:
