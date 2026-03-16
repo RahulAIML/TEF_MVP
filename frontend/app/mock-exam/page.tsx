@@ -32,7 +32,7 @@ export default function MockExamPage() {
   const [timeUp, setTimeUp] = useState(false);
 
   const questionsRef = useRef<Record<number, ExamQuestion>>({});
-  const inFlightRef = useRef<Record<number, Promise<ExamQuestion>>>({});
+  const inFlightRef = useRef<Partial<Record<number, Promise<ExamQuestion>>>>({});
 
   useEffect(() => {
     questionsRef.current = questions;
