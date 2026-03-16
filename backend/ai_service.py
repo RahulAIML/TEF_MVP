@@ -62,10 +62,15 @@ SCENARIO_CONTEXTS = [
 RECENT_PASSAGE_HASHES = deque(maxlen=25)
 
 EXAM_HASHES_PER_SESSION = 50
+EXAM_HASHES_PER_SESSION_ALL = 250
 MAX_EXAM_SESSIONS = 200
 RECENT_EXAM_HASHES_BY_SESSION: dict[str, dict[str, deque[str]]] = {}
+RECENT_EXAM_HASHES_ALL_BY_SESSION: dict[str, deque[str]] = {}
+RECENT_EXAM_TEXT_HASHES_ALL_BY_SESSION: dict[str, deque[str]] = {}
 RECENT_EXAM_SESSIONS: deque[str] = deque()
 RECENT_EXAM_HASHES_GLOBAL: dict[str, deque[str]] = {}
+RECENT_EXAM_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
+RECENT_EXAM_TEXT_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
 
 QUESTION_PROFILES = [
   (1, 7, "everyday_life", "Everyday-life document"),
@@ -182,6 +187,9 @@ def _passage_fingerprint(title: str, passage: str) -> str:
   normalized = re.sub(r"\s+", " ", f"{title} {passage}".strip().lower())
   return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
+def _starts_with_avis(text: str) -> bool:
+  return bool(re.match(r"(?i)^\s*avis\b", text))
+
 def _exam_fingerprint(question: ExamQuestion) -> str:
   normalized = re.sub(
     r"\s+",
@@ -191,25 +199,61 @@ def _exam_fingerprint(question: ExamQuestion) -> str:
   return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _exam_text_fingerprint(text: str) -> str:
+  normalized = re.sub(r"\s+", " ", text.strip().lower())
+  return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _ensure_exam_session(session_id: str) -> None:
+  if session_id in RECENT_EXAM_HASHES_BY_SESSION:
+    if session_id not in RECENT_EXAM_HASHES_ALL_BY_SESSION:
+      RECENT_EXAM_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
+    if session_id not in RECENT_EXAM_TEXT_HASHES_ALL_BY_SESSION:
+      RECENT_EXAM_TEXT_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
+    return
+
+  RECENT_EXAM_HASHES_BY_SESSION[session_id] = {}
+  RECENT_EXAM_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
+  RECENT_EXAM_TEXT_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
+  RECENT_EXAM_SESSIONS.append(session_id)
+  if len(RECENT_EXAM_SESSIONS) > MAX_EXAM_SESSIONS:
+    oldest = RECENT_EXAM_SESSIONS.popleft()
+    RECENT_EXAM_HASHES_BY_SESSION.pop(oldest, None)
+    RECENT_EXAM_HASHES_ALL_BY_SESSION.pop(oldest, None)
+    RECENT_EXAM_TEXT_HASHES_ALL_BY_SESSION.pop(oldest, None)
+
+
 def _get_exam_cache(session_id: str | None, question_type: str) -> deque[str]:
+(session_id: str | None, question_type: str) -> deque[str]:
   if not session_id:
     return RECENT_EXAM_HASHES_GLOBAL.setdefault(
       question_type,
       deque(maxlen=EXAM_HASHES_PER_SESSION)
     )
 
-  if session_id not in RECENT_EXAM_HASHES_BY_SESSION:
-    RECENT_EXAM_HASHES_BY_SESSION[session_id] = {}
-    RECENT_EXAM_SESSIONS.append(session_id)
-    if len(RECENT_EXAM_SESSIONS) > MAX_EXAM_SESSIONS:
-      oldest = RECENT_EXAM_SESSIONS.popleft()
-      RECENT_EXAM_HASHES_BY_SESSION.pop(oldest, None)
-
+  _ensure_exam_session(session_id)
   session_cache = RECENT_EXAM_HASHES_BY_SESSION[session_id]
   if question_type not in session_cache:
     session_cache[question_type] = deque(maxlen=EXAM_HASHES_PER_SESSION)
 
   return session_cache[question_type]
+
+
+def _get_exam_cache_all(session_id: str | None) -> deque[str]:
+  if not session_id:
+    return RECENT_EXAM_HASHES_ALL_GLOBAL
+
+  _ensure_exam_session(session_id)
+  return RECENT_EXAM_HASHES_ALL_BY_SESSION[session_id]
+
+
+
+def _get_exam_text_cache_all(session_id: str | None) -> deque[str]:
+  if not session_id:
+    return RECENT_EXAM_TEXT_HASHES_ALL_GLOBAL
+
+  _ensure_exam_session(session_id)
+  return RECENT_EXAM_TEXT_HASHES_ALL_BY_SESSION[session_id]
 
 
 
@@ -261,6 +305,7 @@ Rules:
 - Question type: {label}.
 - {guidance}
 - Text length: 60 to 140 words.
+- The text must be unique within this session; do not reuse any previous situation, wording, or setting.
 - Scenario anchor: The text must take place in {place} and involve {context}.
 - Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
 - Ensure the setting, names, and situation differ from previous questions of this type.
@@ -278,17 +323,35 @@ Rules:
 """
 
   last_error: Exception | None = None
-  for _ in range(6):
+  for _ in range(8):
     try:
-      payload = _generate_json(prompt, temperature=0.85)
+      payload = _generate_json(prompt, temperature=1.0)
       normalized = _normalize_exam_question(payload, question_type)
       question = ExamQuestion.model_validate(normalized)
       fingerprint = _exam_fingerprint(question)
+      text_fingerprint = _exam_text_fingerprint(question.text)
       cache = _get_exam_cache(session_id, question_type)
-      if fingerprint in cache:
+      cache_all = _get_exam_cache_all(session_id)
+      text_cache_all = _get_exam_text_cache_all(session_id)
+      global_cache = _get_exam_cache(None, question_type)
+      global_cache_all = _get_exam_cache_all(None)
+      global_text_cache_all = _get_exam_text_cache_all(None)
+      if (
+        fingerprint in cache
+        or fingerprint in cache_all
+        or text_fingerprint in text_cache_all
+        or fingerprint in global_cache
+        or fingerprint in global_cache_all
+        or text_fingerprint in global_text_cache_all
+      ):
         last_error = RuntimeError("Duplicate question generated; retrying.")
         continue
       cache.append(fingerprint)
+      cache_all.append(fingerprint)
+      text_cache_all.append(text_fingerprint)
+      global_cache.append(fingerprint)
+      global_cache_all.append(fingerprint)
+      global_text_cache_all.append(text_fingerprint)
       return question
     except Exception as error:
       last_error = error
@@ -314,6 +377,7 @@ Rules:
 - Passage length: 250 to 350 words.
 - Domain: {domain}. Keep the topic focused on this domain.
 - Scenario anchor: The passage must take place in {place} and involve {context}.
+- The passage must start with a full sentence (not a heading like "Avis"). Use the title field for any heading.
 - Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
 - Ensure the setting, names, and situation differ from previous passages.
 - Output valid JSON only (no markdown, no commentary).
@@ -327,6 +391,9 @@ Rules:
     try:
       payload = _generate_json(prompt, temperature=0.85)
       passage = PassageResponse.model_validate(payload)
+      if _starts_with_avis(passage.passage):
+        last_error = RuntimeError("Passage started with 'Avis'; retrying.")
+        continue
       fingerprint = _passage_fingerprint(passage.title, passage.passage)
       if fingerprint in RECENT_PASSAGE_HASHES:
         last_error = RuntimeError("Duplicate passage generated; retrying.")
@@ -367,6 +434,7 @@ Rules:
 - Passage length: 250 to 350 words.
 - Domain: {domain}. Keep the topic focused on this domain.
 - Scenario anchor: The passage must take place in {place} and involve {context}.
+- The passage must start with a full sentence (not a heading like "Avis"). Use the title field for any heading.
 - Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
 - Ensure the setting, names, and situation differ from previous passages.
 - Questions must be based on the passage content.
@@ -394,6 +462,9 @@ Rules:
         for question in payload.get("questions", [])
       ]
       quiz = PassageQuizResponse.model_validate(payload)
+      if _starts_with_avis(quiz.passage):
+        last_error = RuntimeError("Passage started with 'Avis'; retrying.")
+        continue
       fingerprint = _passage_fingerprint(quiz.title, quiz.passage)
       if fingerprint in RECENT_PASSAGE_HASHES:
         last_error = RuntimeError("Duplicate passage generated; retrying.")
