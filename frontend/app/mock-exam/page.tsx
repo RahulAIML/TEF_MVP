@@ -9,7 +9,7 @@ import QuestionNavigator from "@/components/QuestionNavigator";
 import TimerClock from "@/components/TimerClock";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { generateQuestion, submitExam } from "@/services/api";
+import { generateQuestionStream, submitExam } from "@/services/api";
 import type { AnswerOption, ExamQuestion, SubmitExamResponse } from "@/types/exam";
 
 const TOTAL_QUESTIONS = 40;
@@ -30,6 +30,7 @@ export default function MockExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState<SubmitExamResponse | null>(null);
   const [timeUp, setTimeUp] = useState(false);
+  const [streamingPreview, setStreamingPreview] = useState("");
 
   const questionsRef = useRef<Record<number, ExamQuestion>>({});
   const inFlightRef = useRef<Partial<Record<number, Promise<ExamQuestion>>>>({});
@@ -48,6 +49,7 @@ export default function MockExamPage() {
     if (inFlight) {
       if (showLoader) {
         setLoadingQuestion(true);
+        setStreamingPreview("");
       }
       const shouldResumeTimer = showLoader && timerActive;
       if (shouldResumeTimer) {
@@ -58,6 +60,7 @@ export default function MockExamPage() {
       } finally {
         if (showLoader) {
           setLoadingQuestion(false);
+        setStreamingPreview("");
         }
         if (shouldResumeTimer && !timeUp && !results) {
           setTimerActive(true);
@@ -67,13 +70,24 @@ export default function MockExamPage() {
 
     if (showLoader) {
       setLoadingQuestion(true);
+      setStreamingPreview("");
     }
     const shouldResumeTimer = showLoader && timerActive;
     if (shouldResumeTimer) {
       setTimerActive(false);
     }
     try {
-      const request = generateQuestion({ question_number: questionNumber }).then((question) => {
+      const request = generateQuestionStream(
+        { question_number: questionNumber },
+        showLoader
+          ? (text) => {
+              setStreamingPreview((prev) => {
+                const next = prev + text;
+                return next.length > 800 ? next.slice(-800) : next;
+              });
+            }
+          : undefined
+      ).then((question) => {
         const updated = { ...questionsRef.current, [questionNumber]: question };
         questionsRef.current = updated;
         setQuestions(updated);
@@ -85,6 +99,7 @@ export default function MockExamPage() {
       delete inFlightRef.current[questionNumber];
       if (showLoader) {
         setLoadingQuestion(false);
+        setStreamingPreview("");
       }
       if (shouldResumeTimer && !timeUp && !results) {
         setTimerActive(true);
@@ -254,7 +269,14 @@ export default function MockExamPage() {
                 </div>
               )}
               {loadingQuestion && (
-                <p className="text-sm text-slate-500">Generating question...</p>
+                <div className="space-y-2">
+                  <p className="text-sm text-slate-500">Generating question...</p>
+                  {streamingPreview && (
+                    <p className="max-h-24 overflow-hidden whitespace-pre-wrap text-xs text-slate-400">
+                      {streamingPreview}
+                    </p>
+                  )}
+                </div>
               )}
               {currentQuestionData && (
                 <QuestionCard

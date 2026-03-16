@@ -2,9 +2,10 @@ import json
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from ai_service import generate_exam_question
+from ai_service import generate_exam_question, stream_exam_question_events
 from auth import get_optional_user
 from database import get_db
 from models import ExamAttempt, User
@@ -33,6 +34,18 @@ async def post_generate_question(
     question_number=payload.question_number,
     **question.model_dump()
   )
+
+
+@router.post("/generate-question-stream")
+async def post_generate_question_stream(
+  payload: GenerateQuestionRequest,
+  _user: User = Depends(get_optional_user)
+) -> StreamingResponse:
+  def event_stream():
+    for event in stream_exam_question_events(payload.question_number):
+      yield json.dumps(event, ensure_ascii=False) + "\n"
+
+  return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 @router.post("/submit-exam", response_model=SubmitExamResponse)
