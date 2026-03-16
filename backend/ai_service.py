@@ -280,7 +280,7 @@ def generate_exam_question(question_number: int, session_id: str | None = None) 
   place, context = _scenario_from_seed(freshness_token)
 
   guidance = {
-    "everyday_life": "Use a notice, email, ad, or public service message.",
+    "everyday_life": "Use a mix of formats (short email, SMS, poster, timetable, instruction, chat message, memo, ad). Avoid always using Avis headings.",
     "gap_fill": "Include a short text with one blank (____). The question asks for the best completion.",
     "rapid_reading": "Use a short text or schedule/graphic described in words to test quick scanning.",
     "administrative": "Use a memo, policy excerpt, form, or workplace announcement.",
@@ -327,6 +327,9 @@ Rules:
       payload = _generate_json(prompt, temperature=1.0)
       normalized = _normalize_exam_question(payload, question_type)
       question = ExamQuestion.model_validate(normalized)
+      if question_type == "everyday_life" and _starts_with_avis(question.text):
+        last_error = RuntimeError("Everyday-life text started with 'Avis'; retrying.")
+        continue
       fingerprint = _exam_fingerprint(question)
       text_fingerprint = _exam_text_fingerprint(question.text)
       cache = _get_exam_cache(session_id, question_type)
