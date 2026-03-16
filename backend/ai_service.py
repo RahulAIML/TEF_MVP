@@ -4,7 +4,7 @@ import json
 import os
 import random
 import re
-from typing import Any, Dict, Tuple, Iterator
+from typing import Any, Dict, Tuple
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -148,7 +148,7 @@ def _question_profile(question_number: int) -> Tuple[str, str]:
   return "everyday_life", "Everyday-life document"
 
 
-def _exam_prompt(question_number: int) -> Tuple[str, str]:
+def generate_exam_question(question_number: int) -> ExamQuestion:
   question_type, label = _question_profile(question_number)
 
   guidance = {
@@ -189,13 +189,6 @@ Rules:
 }}
 """
 
-  return question_type, prompt
-
-
-
-def generate_exam_question(question_number: int) -> ExamQuestion:
-  question_type, prompt = _exam_prompt(question_number)
-
   last_error: Exception | None = None
   for _ in range(5):
     try:
@@ -207,54 +200,6 @@ def generate_exam_question(question_number: int) -> ExamQuestion:
       continue
 
   raise RuntimeError(f"Gemini response validation failed after retries: {last_error}") from last_error
-
-
-def stream_exam_question_events(question_number: int) -> Iterator[Dict[str, Any]]:
-  question_type, prompt = _exam_prompt(question_number)
-  _ensure_api_key()
-  genai.configure(api_key=API_KEY)
-  model = genai.GenerativeModel(MODEL_NAME)
-
-  full_text_parts: list[str] = []
-  try:
-    response = model.generate_content(
-      prompt,
-      generation_config=genai.types.GenerationConfig(
-        temperature=0.75,
-        response_mime_type="application/json"
-      ),
-      stream=True
-    )
-  except Exception as error:
-    yield {
-      "type": "error",
-      "message": f"Gemini generate_content failed with model '{MODEL_NAME}': {error}"
-    }
-    return
-
-  for chunk in response:
-    text = getattr(chunk, "text", "")
-    if not text:
-      continue
-    full_text_parts.append(text)
-    yield {"type": "chunk", "text": text}
-
-  full_text = "".join(full_text_parts)
-  if not full_text.strip():
-    yield {"type": "error", "message": "Gemini returned an empty response."}
-    return
-
-  try:
-    payload = _extract_json_payload(full_text)
-    normalized = _normalize_exam_question(payload, question_type)
-    question = ExamQuestion.model_validate(normalized)
-    yield {
-      "type": "done",
-      "question_number": question_number,
-      "question": question.model_dump()
-    }
-  except Exception as error:
-    yield {"type": "error", "message": f"Gemini response validation failed: {error}"}
 
 
 def generate_passage() -> PassageResponse:
