@@ -61,6 +61,12 @@ SCENARIO_CONTEXTS = [
 
 RECENT_PASSAGE_HASHES = deque(maxlen=25)
 
+EXAM_HASHES_PER_SESSION = 50
+MAX_EXAM_SESSIONS = 200
+RECENT_EXAM_HASHES_BY_SESSION: dict[str, dict[str, deque[str]]] = {}
+RECENT_EXAM_SESSIONS: deque[str] = deque()
+RECENT_EXAM_HASHES_GLOBAL: dict[str, deque[str]] = {}
+
 QUESTION_PROFILES = [
   (1, 7, "everyday_life", "Everyday-life document"),
   (8, 17, "gap_fill", "Incomplete sentences / gap-fill text"),
@@ -176,6 +182,36 @@ def _passage_fingerprint(title: str, passage: str) -> str:
   normalized = re.sub(r"\s+", " ", f"{title} {passage}".strip().lower())
   return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
+def _exam_fingerprint(question: ExamQuestion) -> str:
+  normalized = re.sub(
+    r"\s+",
+    " ",
+    f"{question.text} {question.question} {' '.join(question.options)}".strip().lower()
+  )
+  return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _get_exam_cache(session_id: str | None, question_type: str) -> deque[str]:
+  if not session_id:
+    return RECENT_EXAM_HASHES_GLOBAL.setdefault(
+      question_type,
+      deque(maxlen=EXAM_HASHES_PER_SESSION)
+    )
+
+  if session_id not in RECENT_EXAM_HASHES_BY_SESSION:
+    RECENT_EXAM_HASHES_BY_SESSION[session_id] = {}
+    RECENT_EXAM_SESSIONS.append(session_id)
+    if len(RECENT_EXAM_SESSIONS) > MAX_EXAM_SESSIONS:
+      oldest = RECENT_EXAM_SESSIONS.popleft()
+      RECENT_EXAM_HASHES_BY_SESSION.pop(oldest, None)
+
+  session_cache = RECENT_EXAM_HASHES_BY_SESSION[session_id]
+  if question_type not in session_cache:
+    session_cache[question_type] = deque(maxlen=EXAM_HASHES_PER_SESSION)
+
+  return session_cache[question_type]
+
+
 
 
 def _pick_domain() -> str:
@@ -195,8 +231,10 @@ def _question_profile(question_number: int) -> Tuple[str, str]:
   return "everyday_life", "Everyday-life document"
 
 
-def generate_exam_question(question_number: int) -> ExamQuestion:
+def generate_exam_question(question_number: int, session_id: str | None = None) -> ExamQuestion:
   question_type, label = _question_profile(question_number)
+  freshness_token = _freshness_token()
+  place, context = _scenario_from_seed(freshness_token)
 
   guidance = {
     "everyday_life": "Use a notice, email, ad, or public service message.",
@@ -223,6 +261,9 @@ Rules:
 - Question type: {label}.
 - {guidance}
 - Text length: 60 to 140 words.
+- Scenario anchor: The text must take place in {place} and involve {context}.
+- Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
+- Ensure the setting, names, and situation differ from previous questions of this type.
 - correct_answer must be one of A, B, C, D.
 - Output valid JSON only (no markdown, no commentary).
 - Use this exact JSON shape:
@@ -237,11 +278,18 @@ Rules:
 """
 
   last_error: Exception | None = None
-  for _ in range(5):
+  for _ in range(6):
     try:
-      payload = _generate_json(prompt, temperature=0.75)
+      payload = _generate_json(prompt, temperature=0.85)
       normalized = _normalize_exam_question(payload, question_type)
-      return ExamQuestion.model_validate(normalized)
+      question = ExamQuestion.model_validate(normalized)
+      fingerprint = _exam_fingerprint(question)
+      cache = _get_exam_cache(session_id, question_type)
+      if fingerprint in cache:
+        last_error = RuntimeError("Duplicate question generated; retrying.")
+        continue
+      cache.append(fingerprint)
+      return question
     except Exception as error:
       last_error = error
       continue

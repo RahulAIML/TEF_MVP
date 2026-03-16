@@ -25,7 +25,7 @@ async def post_generate_question(
   _user: User = Depends(get_optional_user)
 ) -> GenerateQuestionResponse:
   try:
-    question = generate_exam_question(payload.question_number)
+    question = generate_exam_question(payload.question_number, payload.session_id)
   except RuntimeError as error:
     raise HTTPException(status_code=500, detail=str(error)) from error
 

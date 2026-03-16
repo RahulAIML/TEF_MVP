@@ -17,6 +17,7 @@ ExamQuestionType = Literal[
 
 class GenerateQuestionRequest(BaseModel):
   question_number: int = Field(ge=1, le=40)
+  session_id: str | None = None
 
 
 class ExamQuestion(BaseModel):

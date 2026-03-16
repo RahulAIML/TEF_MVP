@@ -9,6 +9,7 @@ export type ExamQuestionType =
 
 export interface GenerateQuestionRequest {
   question_number: number;
+  session_id?: string;
 }
 
 export interface ExamQuestion {

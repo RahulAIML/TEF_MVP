@@ -33,6 +33,7 @@ export default function MockExamPage() {
 
   const questionsRef = useRef<Record<number, ExamQuestion>>({});
   const inFlightRef = useRef<Partial<Record<number, Promise<ExamQuestion>>>>({});
+  const examSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     questionsRef.current = questions;
@@ -73,7 +74,10 @@ export default function MockExamPage() {
       setTimerActive(false);
     }
     try {
-      const request = generateQuestion({ question_number: questionNumber }).then((question) => {
+      const request = generateQuestion({
+        question_number: questionNumber,
+        session_id: examSessionIdRef.current ?? undefined
+      }).then((question) => {
         const updated = { ...questionsRef.current, [questionNumber]: question };
         questionsRef.current = updated;
         setQuestions(updated);
@@ -116,6 +120,10 @@ export default function MockExamPage() {
       return;
     }
     setIsExamStarted(true);
+    const sessionId = typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    examSessionIdRef.current = sessionId;
     setTimeUp(false);
     setError("");
     setSubmitNote("");
