@@ -1,0 +1,39 @@
+databases:
+  - name: tef-postgres
+    databaseName: tef_reading
+    user: tef_reading
+
+services:
+  - type: web
+    name: tef-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-2.0-flash
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_ORIGIN
+        value: https://tef-frontend.onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tef-postgres
+          property: connectionString
+
+  - type: web
+    name: tef-frontend
+    runtime: node
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://tef-backend.onrender.com

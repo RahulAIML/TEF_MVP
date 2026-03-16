@@ -14,6 +14,7 @@ import type { AnswerOption, ExamQuestion, SubmitExamResponse } from "@/types/exa
 
 const TOTAL_QUESTIONS = 40;
 const EXAM_DURATION_SECONDS = 60 * 60;
+const PREFETCH_AHEAD = 2;
 
 export default function MockExamPage() {
   const [isExamStarted, setIsExamStarted] = useState(false);
@@ -31,6 +32,7 @@ export default function MockExamPage() {
   const [timeUp, setTimeUp] = useState(false);
 
   const questionsRef = useRef<Record<number, ExamQuestion>>({});
+  const inFlightRef = useRef<Record<number, Promise<ExamQuestion>>>({});
 
   useEffect(() => {
     questionsRef.current = questions;
@@ -42,26 +44,70 @@ export default function MockExamPage() {
     if (existing) {
       return existing;
     }
+    const inFlight = inFlightRef.current[questionNumber];
+    if (inFlight) {
+      if (showLoader) {
+        setLoadingQuestion(true);
+      }
+      const shouldResumeTimer = showLoader && timerActive;
+      if (shouldResumeTimer) {
+        setTimerActive(false);
+      }
+      try {
+        return await inFlight;
+      } finally {
+        if (showLoader) {
+          setLoadingQuestion(false);
+        }
+        if (shouldResumeTimer && !timeUp && !results) {
+          setTimerActive(true);
+        }
+      }
+    }
+
     if (showLoader) {
       setLoadingQuestion(true);
     }
-    const shouldResumeTimer = timerActive;
+    const shouldResumeTimer = showLoader && timerActive;
     if (shouldResumeTimer) {
       setTimerActive(false);
     }
     try {
-      const question = await generateQuestion({ question_number: questionNumber });
-      const updated = { ...questionsRef.current, [questionNumber]: question };
-      questionsRef.current = updated;
-      setQuestions(updated);
-      return question;
+      const request = generateQuestion({ question_number: questionNumber }).then((question) => {
+        const updated = { ...questionsRef.current, [questionNumber]: question };
+        questionsRef.current = updated;
+        setQuestions(updated);
+        return question;
+      });
+      inFlightRef.current[questionNumber] = request;
+      return await request;
     } finally {
+      delete inFlightRef.current[questionNumber];
       if (showLoader) {
         setLoadingQuestion(false);
       }
       if (shouldResumeTimer && !timeUp && !results) {
         setTimerActive(true);
       }
+    }
+  };
+
+  const prefetchQuestions = (fromQuestion: number) => {
+    if (!isExamStarted || timeUp || results) {
+      return;
+    }
+    for (let offset = 1; offset <= PREFETCH_AHEAD; offset += 1) {
+      const questionNumber = fromQuestion + offset;
+      if (questionNumber > TOTAL_QUESTIONS) {
+        break;
+      }
+      if (questionsRef.current[questionNumber]) {
+        continue;
+      }
+      if (inFlightRef.current[questionNumber]) {
+        continue;
+      }
+      void ensureQuestion(questionNumber, false).catch(() => undefined);
     }
   };
 
@@ -75,6 +121,7 @@ export default function MockExamPage() {
     setSubmitNote("");
     try {
       await ensureQuestion(1);
+      prefetchQuestions(1);
       setStartedAt(new Date().toISOString());
       setTimerKey((prev) => prev + 1);
       setTimerActive(true);
@@ -89,10 +136,13 @@ export default function MockExamPage() {
     if (!questionsRef.current[questionNumber]) {
       try {
         await ensureQuestion(questionNumber);
+        prefetchQuestions(questionNumber);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load question.");
       }
+      return;
     }
+    prefetchQuestions(questionNumber);
   };
 
   const handleAnswerSelect = (value: AnswerOption) => {
