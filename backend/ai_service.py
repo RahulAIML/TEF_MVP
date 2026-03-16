@@ -224,7 +224,6 @@ def _ensure_exam_session(session_id: str) -> None:
 
 
 def _get_exam_cache(session_id: str | None, question_type: str) -> deque[str]:
-(session_id: str | None, question_type: str) -> deque[str]:
   if not session_id:
     return RECENT_EXAM_HASHES_GLOBAL.setdefault(
       question_type,
