@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+from collections import deque
+import hashlib
 import os
 import random
 import re
@@ -30,6 +32,34 @@ DOMAINS = [
   "environment and sustainability",
   "cuisine and food culture"
 ]
+
+SCENARIO_PLACES = [
+  "Montreal",
+  "Quebec",
+  "Lyon",
+  "Marseille",
+  "Toulouse",
+  "Nantes",
+  "Grenoble",
+  "Rennes",
+  "Bordeaux",
+  "Lille"
+]
+
+SCENARIO_CONTEXTS = [
+  "un centre communautaire",
+  "une ecole municipale",
+  "une bibliotheque",
+  "une entreprise locale",
+  "un service public",
+  "une association culturelle",
+  "un marche de quartier",
+  "un hopital",
+  "un bureau administratif",
+  "un parc urbain"
+]
+
+RECENT_PASSAGE_HASHES = deque(maxlen=25)
 
 QUESTION_PROFILES = [
   (1, 7, "everyday_life", "Everyday-life document"),
@@ -135,6 +165,18 @@ def _normalize_passage_question(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _freshness_token() -> str:
   return uuid.uuid4().hex[:8]
 
+def _scenario_from_seed(seed: str) -> tuple[str, str]:
+  rng = random.Random(seed)
+  place = rng.choice(SCENARIO_PLACES)
+  context = rng.choice(SCENARIO_CONTEXTS)
+  return place, context
+
+
+def _passage_fingerprint(title: str, passage: str) -> str:
+  normalized = re.sub(r"\s+", " ", f"{title} {passage}".strip().lower())
+  return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 
 def _pick_domain() -> str:
   global _last_domain
@@ -208,9 +250,12 @@ Rules:
 
 
 def generate_passage() -> PassageResponse:
-  domain = _pick_domain()
-  freshness_token = _freshness_token()
-  prompt = f"""
+  last_error: Exception | None = None
+  for _ in range(4):
+    domain = _pick_domain()
+    freshness_token = _freshness_token()
+    place, context = _scenario_from_seed(freshness_token)
+    prompt = f"""
 Generate a TEF Canada B2 reading passage in French.
 
 Return JSON with:
@@ -220,6 +265,7 @@ passage
 Rules:
 - Passage length: 250 to 350 words.
 - Domain: {domain}. Keep the topic focused on this domain.
+- Scenario anchor: The passage must take place in {place} and involve {context}.
 - Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
 - Ensure the setting, names, and situation differ from previous passages.
 - Output valid JSON only (no markdown, no commentary).
@@ -230,19 +276,32 @@ Rules:
 }}
 """
 
-  payload = _generate_json(prompt, temperature=0.85)
-  try:
-    return PassageResponse.model_validate(payload)
-  except ValidationError as validation_error:
-    raise RuntimeError(
-      f"Gemini response validation failed for passage generation: {validation_error}"
-    ) from validation_error
+    try:
+      payload = _generate_json(prompt, temperature=0.85)
+      passage = PassageResponse.model_validate(payload)
+      fingerprint = _passage_fingerprint(passage.title, passage.passage)
+      if fingerprint in RECENT_PASSAGE_HASHES:
+        last_error = RuntimeError("Duplicate passage generated; retrying.")
+        continue
+      RECENT_PASSAGE_HASHES.append(fingerprint)
+      return passage
+    except ValidationError as validation_error:
+      last_error = validation_error
+    except Exception as error:
+      last_error = error
+
+  raise RuntimeError(
+    f"Gemini response validation failed for passage generation after retries: {last_error}"
+  ) from last_error
 
 
 def generate_passage_quiz() -> PassageQuizResponse:
-  domain = _pick_domain()
-  freshness_token = _freshness_token()
-  prompt = f"""
+  last_error: Exception | None = None
+  for _ in range(5):
+    domain = _pick_domain()
+    freshness_token = _freshness_token()
+    place, context = _scenario_from_seed(freshness_token)
+    prompt = f"""
 Generate a TEF Canada B2 reading passage in French with 10 comprehension questions.
 
 Return JSON with:
@@ -259,6 +318,7 @@ explanation
 Rules:
 - Passage length: 250 to 350 words.
 - Domain: {domain}. Keep the topic focused on this domain.
+- Scenario anchor: The passage must take place in {place} and involve {context}.
 - Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
 - Ensure the setting, names, and situation differ from previous passages.
 - Questions must be based on the passage content.
@@ -279,15 +339,19 @@ Rules:
 }}
 """
 
-  last_error: Exception | None = None
-  for _ in range(5):
     try:
       payload = _generate_json(prompt, temperature=0.85)
       payload["questions"] = [
         _normalize_passage_question(question)
         for question in payload.get("questions", [])
       ]
-      return PassageQuizResponse.model_validate(payload)
+      quiz = PassageQuizResponse.model_validate(payload)
+      fingerprint = _passage_fingerprint(quiz.title, quiz.passage)
+      if fingerprint in RECENT_PASSAGE_HASHES:
+        last_error = RuntimeError("Duplicate passage generated; retrying.")
+        continue
+      RECENT_PASSAGE_HASHES.append(fingerprint)
+      return quiz
     except Exception as error:
       last_error = error
       continue
