@@ -4,6 +4,7 @@ import json
 import os
 import random
 import re
+import uuid
 from typing import Any, Dict, Tuple
 
 import google.generativeai as genai
@@ -131,6 +132,10 @@ def _normalize_passage_question(payload: Dict[str, Any]) -> Dict[str, Any]:
   }
 
 
+def _freshness_token() -> str:
+  return uuid.uuid4().hex[:8]
+
+
 def _pick_domain() -> str:
   global _last_domain
   choices = [domain for domain in DOMAINS if domain != _last_domain]
@@ -204,6 +209,7 @@ Rules:
 
 def generate_passage() -> PassageResponse:
   domain = _pick_domain()
+  freshness_token = _freshness_token()
   prompt = f"""
 Generate a TEF Canada B2 reading passage in French.
 
@@ -214,6 +220,8 @@ passage
 Rules:
 - Passage length: 250 to 350 words.
 - Domain: {domain}. Keep the topic focused on this domain.
+- Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
+- Ensure the setting, names, and situation differ from previous passages.
 - Output valid JSON only (no markdown, no commentary).
 - Use this exact JSON shape:
 {{
@@ -233,6 +241,7 @@ Rules:
 
 def generate_passage_quiz() -> PassageQuizResponse:
   domain = _pick_domain()
+  freshness_token = _freshness_token()
   prompt = f"""
 Generate a TEF Canada B2 reading passage in French with 10 comprehension questions.
 
@@ -250,6 +259,8 @@ explanation
 Rules:
 - Passage length: 250 to 350 words.
 - Domain: {domain}. Keep the topic focused on this domain.
+- Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
+- Ensure the setting, names, and situation differ from previous passages.
 - Questions must be based on the passage content.
 - correct_answer must be one of A, B, C, D.
 - Output valid JSON only (no markdown, no commentary).
