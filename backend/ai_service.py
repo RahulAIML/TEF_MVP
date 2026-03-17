@@ -19,6 +19,7 @@ from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMean
 load_dotenv()
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+TTS_MODEL_NAME = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-lite-preview-tts")
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 DOMAINS = [
@@ -344,25 +345,38 @@ def _normalize_listening_question(payload: Dict[str, Any]) -> Dict[str, Any]:
 def _generate_tts_audio(script: str) -> str:
   _ensure_api_key()
   genai.configure(api_key=API_KEY)
-  model = genai.GenerativeModel(MODEL_NAME)
+  model = genai.GenerativeModel(TTS_MODEL_NAME)
   try:
     response = model.generate_content(
       [script],
-      generation_config=genai.types.GenerationConfig(response_mime_type="audio/mp3")
+      generation_config=genai.types.GenerationConfig(
+        response_mime_type="audio/mp3"
+      )
     )
   except Exception as error:
-    raise RuntimeError(f"Gemini TTS failed with model '{MODEL_NAME}': {error}") from error
+    raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
 
-  inline_part = None
-  for part in getattr(response, "parts", []) or []:
-    inline = getattr(part, "inline_data", None)
-    if inline:
-      inline_part = inline
-      break
+  def _extract_inline(resp: Any):
+    # Newer responses may store audio in candidates[0].content.parts
+    for cand in getattr(resp, "candidates", []) or []:
+      content = getattr(cand, "content", None)
+      for part in getattr(content, "parts", []) or []:
+        inline = getattr(part, "inline_data", None)
+        if inline and getattr(inline, "data", None):
+          return inline
+    # Older path: top-level parts
+    for part in getattr(resp, "parts", []) or []:
+      inline = getattr(part, "inline_data", None)
+      if inline and getattr(inline, "data", None):
+        return inline
+    # Legacy field
+    inline = getattr(resp, "inline_data", None)
+    if inline and getattr(inline, "data", None):
+      return inline
+    return None
+
+  inline_part = _extract_inline(response)
   if inline_part is None:
-    inline_part = getattr(response, "inline_data", None)
-
-  if inline_part is None or not getattr(inline_part, "data", None):
     raise RuntimeError("Gemini TTS returned no audio data.")
 
   data = inline_part.data
