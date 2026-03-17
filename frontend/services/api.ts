@@ -7,6 +7,7 @@ import type {
 } from "@/types/exam";
 import type { DashboardSummaryResponse } from "@/types/dashboard";
 import type { PassageQuizResponse, PassageResponse } from "@/types/passage";
+import type { GenerateListeningQuestionRequest, ListeningQuestion } from "@/types/listening";
 import type { AuthResponse, LoginRequest, SignupRequest } from "@/types/user";
 import { getAuthToken } from "@/lib/auth";
 
@@ -43,6 +44,19 @@ export async function loginUser(payload: LoginRequest): Promise<AuthResponse> {
     cache: "no-store"
   });
   return parseResponse<AuthResponse>(res);
+}
+
+
+export async function generateListeningQuestion(
+  payload: GenerateListeningQuestionRequest
+): Promise<ListeningQuestion> {
+  const res = await fetch(`${API_BASE_URL}/generate-listening-question`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<ListeningQuestion>(res);
 }
 
 export async function generateQuestion(

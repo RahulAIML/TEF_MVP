@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import base64
 from collections import deque
 import hashlib
 import os
@@ -13,7 +14,7 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
-from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMeaningResponse
+from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMeaningResponse, ListeningQuestionResponse
 
 load_dotenv()
 
@@ -71,6 +72,16 @@ RECENT_EXAM_SESSIONS: deque[str] = deque()
 RECENT_EXAM_HASHES_GLOBAL: dict[str, deque[str]] = {}
 RECENT_EXAM_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
 RECENT_EXAM_TEXT_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=EXAM_HASHES_PER_SESSION_ALL)
+
+LISTENING_HASHES_PER_SESSION = 80
+LISTENING_HASHES_PER_SESSION_ALL = 200
+RECENT_LISTENING_HASHES_BY_SESSION: dict[str, deque[str]] = {}
+RECENT_LISTENING_HASHES_ALL_BY_SESSION: dict[str, deque[str]] = {}
+RECENT_LISTENING_SCRIPT_HASHES_ALL_BY_SESSION: dict[str, deque[str]] = {}
+RECENT_LISTENING_SESSIONS: deque[str] = deque()
+RECENT_LISTENING_HASHES_GLOBAL: deque[str] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
+RECENT_LISTENING_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
+RECENT_LISTENING_SCRIPT_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
 
 QUESTION_PROFILES = [
   (1, 7, "everyday_life", "Everyday-life document"),
@@ -257,6 +268,111 @@ def _get_exam_text_cache_all(session_id: str | None) -> deque[str]:
 
 
 
+def _listening_fingerprint(script: str, question: str, options: list[str]) -> str:
+  normalized = re.sub(r"\s+", " ", f"{script} {question} {' '.join(options)}".strip().lower())
+  return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _listening_script_fingerprint(script: str) -> str:
+  normalized = re.sub(r"\s+", " ", script.strip().lower())
+  return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def _ensure_listening_session(session_id: str) -> None:
+  if session_id in RECENT_LISTENING_HASHES_BY_SESSION:
+    if session_id not in RECENT_LISTENING_HASHES_ALL_BY_SESSION:
+      RECENT_LISTENING_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
+    if session_id not in RECENT_LISTENING_SCRIPT_HASHES_ALL_BY_SESSION:
+      RECENT_LISTENING_SCRIPT_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
+    return
+
+  RECENT_LISTENING_HASHES_BY_SESSION[session_id] = deque(maxlen=LISTENING_HASHES_PER_SESSION)
+  RECENT_LISTENING_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
+  RECENT_LISTENING_SCRIPT_HASHES_ALL_BY_SESSION[session_id] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
+  RECENT_LISTENING_SESSIONS.append(session_id)
+  if len(RECENT_LISTENING_SESSIONS) > MAX_EXAM_SESSIONS:
+    oldest = RECENT_LISTENING_SESSIONS.popleft()
+    RECENT_LISTENING_HASHES_BY_SESSION.pop(oldest, None)
+    RECENT_LISTENING_HASHES_ALL_BY_SESSION.pop(oldest, None)
+    RECENT_LISTENING_SCRIPT_HASHES_ALL_BY_SESSION.pop(oldest, None)
+
+
+def _get_listening_cache(session_id: str | None) -> deque[str]:
+  if not session_id:
+    return RECENT_LISTENING_HASHES_GLOBAL
+
+  _ensure_listening_session(session_id)
+  return RECENT_LISTENING_HASHES_BY_SESSION.setdefault(session_id, deque(maxlen=LISTENING_HASHES_PER_SESSION))
+
+
+def _get_listening_cache_all(session_id: str | None) -> deque[str]:
+  if not session_id:
+    return RECENT_LISTENING_HASHES_ALL_GLOBAL
+
+  _ensure_listening_session(session_id)
+  return RECENT_LISTENING_HASHES_ALL_BY_SESSION[session_id]
+
+
+def _get_listening_script_cache_all(session_id: str | None) -> deque[str]:
+  if not session_id:
+    return RECENT_LISTENING_SCRIPT_HASHES_ALL_GLOBAL
+
+  _ensure_listening_session(session_id)
+  return RECENT_LISTENING_SCRIPT_HASHES_ALL_BY_SESSION[session_id]
+
+
+def _normalize_listening_question(payload: Dict[str, Any]) -> Dict[str, Any]:
+  options_raw = payload.get("options", [])
+  options = [str(item) for item in options_raw][:4]
+  while len(options) < 4:
+    options.append("Option manquante")
+  options = [_normalize_option(option, index) for index, option in enumerate(options)]
+
+  raw_answer = str(payload.get("correct_answer", "")).strip().upper()
+  answer_match = re.match(r"([A-D])", raw_answer)
+  normalized_answer = answer_match.group(1) if answer_match else "A"
+
+  return {
+    "script": str(payload.get("script", "")).strip(),
+    "question": str(payload.get("question", "")).strip(),
+    "options": options,
+    "correct_answer": normalized_answer,
+    "explanation": str(payload.get("explanation", "")).strip()
+  }
+
+
+def _generate_tts_audio(script: str) -> str:
+  _ensure_api_key()
+  genai.configure(api_key=API_KEY)
+  model = genai.GenerativeModel(MODEL_NAME)
+  try:
+    response = model.generate_content(
+      [script],
+      generation_config=genai.types.GenerationConfig(response_mime_type="audio/mp3")
+    )
+  except Exception as error:
+    raise RuntimeError(f"Gemini TTS failed with model '{MODEL_NAME}': {error}") from error
+
+  inline_part = None
+  for part in getattr(response, "parts", []) or []:
+    inline = getattr(part, "inline_data", None)
+    if inline:
+      inline_part = inline
+      break
+  if inline_part is None:
+    inline_part = getattr(response, "inline_data", None)
+
+  if inline_part is None or not getattr(inline_part, "data", None):
+    raise RuntimeError("Gemini TTS returned no audio data.")
+
+  data = inline_part.data
+  if isinstance(data, bytes):
+    audio_bytes = data
+  else:
+    audio_bytes = base64.b64decode(data)
+  return base64.b64encode(audio_bytes).decode("utf-8")
+
+
 def _pick_domain() -> str:
   global _last_domain
   choices = [domain for domain in DOMAINS if domain != _last_domain]
@@ -360,6 +476,69 @@ Rules:
       continue
 
   raise RuntimeError(f"Gemini response validation failed after retries: {last_error}") from last_error
+
+
+def generate_listening_question(question_number: int, session_id: str | None = None) -> ListeningQuestionResponse:
+  domain = _pick_domain()
+  freshness_token = _freshness_token()
+  place, context = _scenario_from_seed(freshness_token)
+  prompt = f"""
+Generate one TEF Canada listening question in French.
+
+Return JSON with:
+script
+question
+options (array of 4)
+correct_answer
+explanation
+
+Rules:
+- Language: French only.
+- Script length: 20 to 40 seconds when spoken (roughly 90 to 140 words).
+- Style: natural spoken French; can be an announcement, interview, news brief, or dialogue.
+- Topic: {domain}; set in {place} involving {context}.
+- Include one clear MCQ question based on the script.
+- Options: exactly 4. correct_answer must be one of A, B, C, D.
+- Output valid JSON only (no markdown, no commentary).
+- Use this exact JSON shape:
+{{
+  "script": "string",
+  "question": "string",
+  "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
+  "correct_answer": "A",
+  "explanation": "string"
+}}
+"""
+
+  last_error: Exception | None = None
+  for _ in range(6):
+    try:
+      payload = _generate_json(prompt, temperature=0.95)
+      normalized = _normalize_listening_question(payload)
+      question = ListeningQuestionResponse.model_validate(normalized)
+      fingerprint = _listening_fingerprint(question.script, question.question, question.options)
+      script_fingerprint = _listening_script_fingerprint(question.script)
+      cache = _get_listening_cache(session_id)
+      cache_all = _get_listening_cache_all(session_id)
+      script_cache_all = _get_listening_script_cache_all(session_id)
+      if fingerprint in cache or fingerprint in cache_all or script_fingerprint in script_cache_all:
+        last_error = RuntimeError("Duplicate listening question generated; retrying.")
+        continue
+      audio_b64 = _generate_tts_audio(question.script)
+      cache.append(fingerprint)
+      cache_all.append(fingerprint)
+      script_cache_all.append(script_fingerprint)
+      RECENT_LISTENING_HASHES_GLOBAL.append(fingerprint)
+      RECENT_LISTENING_HASHES_ALL_GLOBAL.append(fingerprint)
+      RECENT_LISTENING_SCRIPT_HASHES_ALL_GLOBAL.append(script_fingerprint)
+      return ListeningQuestionResponse(**question.model_dump(), audio=audio_b64)
+    except Exception as error:
+      last_error = error
+      continue
+
+  raise RuntimeError(
+    f"Gemini response validation failed for listening question after retries: {last_error}"
+  ) from last_error
 
 
 def generate_passage() -> PassageResponse:

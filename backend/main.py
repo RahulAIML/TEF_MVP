@@ -10,6 +10,7 @@ from routers.auth_routes import router as auth_router
 from routers.exam_routes import router as exam_router
 from routers.passage_routes import router as passage_router
 from routers.performance_routes import router as performance_router
+from routers.listening_routes import router as listening_router
 
 load_dotenv()
 
@@ -42,6 +43,7 @@ app.include_router(dictionary_router)
 app.include_router(exam_router)
 app.include_router(passage_router)
 app.include_router(performance_router)
+app.include_router(listening_router)
 app.include_router(auth_router)
 
 

@@ -17,6 +17,11 @@ const modules = [
     href: "/passage-analyzer"
   },
   {
+    title: "Listening Mock Exam",
+    description: "Practice listening comprehension with Gemini-generated audio MCQs.",
+    href: "/listening-mock-exam"
+  },
+  {
     title: "Performance Dashboard",
     description: "Track accuracy, recent scores, and weakest areas.",
     href: "/dashboard"

@@ -128,6 +128,27 @@ class WordMeaningResponse(BaseModel):
   synonyms: List[str]
 
 
+class GenerateListeningQuestionRequest(BaseModel):
+  question_number: int = Field(ge=1, le=40)
+  session_id: str | None = None
+
+
+class ListeningQuestionResponse(BaseModel):
+  script: str
+  audio: str
+  question: str
+  options: List[str] = Field(default_factory=list)
+  correct_answer: AnswerOption
+  explanation: str
+
+  @field_validator("options")
+  @classmethod
+  def validate_options(cls, options: List[str]) -> List[str]:
+    if len(options) != 4:
+      raise ValueError("Each question must contain exactly 4 options.")
+    return options
+
+
 class SignupRequest(BaseModel):
   email: str = Field(min_length=5, max_length=255)
   password: str = Field(min_length=8, max_length=128)
