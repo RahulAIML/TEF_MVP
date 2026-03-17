@@ -515,23 +515,27 @@ Rules:
     try:
       payload = _generate_json(prompt, temperature=0.95)
       normalized = _normalize_listening_question(payload)
-      question = ListeningQuestionResponse.model_validate(normalized)
-      fingerprint = _listening_fingerprint(question.script, question.question, question.options)
-      script_fingerprint = _listening_script_fingerprint(question.script)
+      fingerprint = _listening_fingerprint(
+        normalized["script"],
+        normalized["question"],
+        normalized["options"]
+      )
+      script_fingerprint = _listening_script_fingerprint(normalized["script"])
       cache = _get_listening_cache(session_id)
       cache_all = _get_listening_cache_all(session_id)
       script_cache_all = _get_listening_script_cache_all(session_id)
       if fingerprint in cache or fingerprint in cache_all or script_fingerprint in script_cache_all:
         last_error = RuntimeError("Duplicate listening question generated; retrying.")
         continue
-      audio_b64 = _generate_tts_audio(question.script)
+      audio_b64 = _generate_tts_audio(normalized["script"])
       cache.append(fingerprint)
       cache_all.append(fingerprint)
       script_cache_all.append(script_fingerprint)
       RECENT_LISTENING_HASHES_GLOBAL.append(fingerprint)
       RECENT_LISTENING_HASHES_ALL_GLOBAL.append(fingerprint)
       RECENT_LISTENING_SCRIPT_HASHES_ALL_GLOBAL.append(script_fingerprint)
-      return ListeningQuestionResponse(**question.model_dump(), audio=audio_b64)
+      normalized["audio"] = audio_b64
+      return ListeningQuestionResponse.model_validate(normalized)
     except Exception as error:
       last_error = error
       continue
