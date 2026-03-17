@@ -14,6 +14,15 @@ import uuid
 from typing import Any, Dict, Tuple
 
 import google.generativeai as genai
+
+try:
+  from google import genai as genai_client
+  from google.genai import types as genai_types
+  _HAS_GENAI = True
+except Exception:
+  genai_client = None
+  genai_types = None
+  _HAS_GENAI = False
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -360,6 +369,37 @@ def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 24000, channels: int = 1, s
 
 def _generate_tts_audio(script: str) -> str:
   _ensure_api_key()
+
+  if _HAS_GENAI:
+    client = genai_client.Client(api_key=API_KEY)
+    try:
+      response = client.models.generate_content(
+        model=TTS_MODEL_NAME,
+        contents=script,
+        config=genai_types.GenerateContentConfig(
+          response_modalities=["AUDIO"],
+          speech_config=genai_types.SpeechConfig(
+            voice_config=genai_types.VoiceConfig(
+              prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(
+                voice_name="Kore"
+              )
+            )
+          )
+        )
+      )
+    except Exception as error:
+      raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
+
+    inline = response.candidates[0].content.parts[0].inline_data
+    data = inline.data
+    if isinstance(data, bytes):
+      pcm_bytes = data
+    else:
+      pcm_bytes = base64.b64decode(data)
+    wav_bytes = _pcm_to_wav(pcm_bytes)
+    return base64.b64encode(wav_bytes).decode("utf-8")
+
+  # Fallback to REST if google-genai isn't available
   url = f"https://generativelanguage.googleapis.com/v1beta/models/{TTS_MODEL_NAME}:generateContent"
   payload = {
     "contents": [{
