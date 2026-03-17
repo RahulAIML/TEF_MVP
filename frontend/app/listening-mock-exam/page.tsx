@@ -157,10 +157,13 @@ export default function ListeningMockExamPage() {
         .sort((a, b) => a.number - b.number);
 
       if (questionList.length < TOTAL_QUESTIONS) {
-        setSubmitNote(
+        const note =
           `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
-            "Score is based only on generated questions."
-        );
+          "Score is based only on generated questions.";
+        setSubmitNote(note);
+        if (typeof window !== "undefined") {
+          window.alert(note);
+        }
       }
 
       let correct = 0;
