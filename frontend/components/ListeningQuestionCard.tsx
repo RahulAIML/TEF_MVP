@@ -30,7 +30,7 @@ export default function ListeningQuestionCard({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useMemo(() => {
     if (!question.audio) return "";
-    return `data:audio/mp3;base64,${question.audio}`;
+    return `data:audio/wav;base64,${question.audio}`;
   }, [question.audio]);
 
   const remainingPlays = Math.max(0, MAX_PLAYS - playCount);

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import base64
+import struct
+import urllib.request
+import urllib.error
 from collections import deque
 import hashlib
 import os
@@ -19,7 +22,7 @@ from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMean
 load_dotenv()
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-TTS_MODEL_NAME = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-lite-preview-tts")
+TTS_MODEL_NAME = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 
 DOMAINS = [
@@ -342,48 +345,71 @@ def _normalize_listening_question(payload: Dict[str, Any]) -> Dict[str, Any]:
   }
 
 
+def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 24000, channels: int = 1, sample_width: int = 2) -> bytes:
+  byte_rate = sample_rate * channels * sample_width
+  block_align = channels * sample_width
+  data_size = len(pcm_bytes)
+  riff_size = 36 + data_size
+  header = (
+    b"RIFF" + struct.pack("<I", riff_size) + b"WAVE" +
+    b"fmt " + struct.pack("<IHHIIHH", 16, 1, channels, sample_rate, byte_rate, block_align, sample_width * 8) +
+    b"data" + struct.pack("<I", data_size)
+  )
+  return header + pcm_bytes
+
+
 def _generate_tts_audio(script: str) -> str:
   _ensure_api_key()
-  genai.configure(api_key=API_KEY)
-  model = genai.GenerativeModel(TTS_MODEL_NAME)
+  url = f"https://generativelanguage.googleapis.com/v1beta/models/{TTS_MODEL_NAME}:generateContent"
+  payload = {
+    "contents": [{
+      "parts": [{"text": script}]
+    }],
+    "generationConfig": {
+      "responseModalities": ["AUDIO"],
+      "speechConfig": {
+        "voiceConfig": {
+          "prebuiltVoiceConfig": {
+            "voiceName": "Kore"
+          }
+        }
+      }
+    }
+  }
+  data = json.dumps(payload).encode("utf-8")
+  request = urllib.request.Request(
+    url,
+    data=data,
+    headers={
+      "Content-Type": "application/json",
+      "x-goog-api-key": API_KEY
+    }
+  )
   try:
-    response = model.generate_content(
-      [script],
-      generation_config=genai.types.GenerationConfig(
-        response_mime_type="audio/mp3"
-      )
-    )
+    with urllib.request.urlopen(request, timeout=30) as response:
+      response_body = response.read().decode("utf-8")
+  except urllib.error.HTTPError as error:
+    body = error.read().decode("utf-8") if hasattr(error, "read") else str(error)
+    raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {body}") from error
   except Exception as error:
     raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
 
-  def _extract_inline(resp: Any):
-    # Newer responses may store audio in candidates[0].content.parts
-    for cand in getattr(resp, "candidates", []) or []:
-      content = getattr(cand, "content", None)
-      for part in getattr(content, "parts", []) or []:
-        inline = getattr(part, "inline_data", None)
-        if inline and getattr(inline, "data", None):
-          return inline
-    # Older path: top-level parts
-    for part in getattr(resp, "parts", []) or []:
-      inline = getattr(part, "inline_data", None)
-      if inline and getattr(inline, "data", None):
-        return inline
-    # Legacy field
-    inline = getattr(resp, "inline_data", None)
-    if inline and getattr(inline, "data", None):
-      return inline
-    return None
+  parsed = json.loads(response_body)
+  candidates = parsed.get("candidates") or []
+  if not candidates:
+    raise RuntimeError("Gemini TTS returned no candidates.")
+  parts = (candidates[0].get("content") or {}).get("parts") or []
+  if not parts:
+    raise RuntimeError("Gemini TTS returned no audio parts.")
+  inline = parts[0].get("inlineData") or {}
+  audio_b64 = inline.get("data")
+  mime_type = inline.get("mimeType", "")
+  if not audio_b64:
+    raise RuntimeError("Gemini TTS returned empty audio data.")
 
-  inline_part = _extract_inline(response)
-  if inline_part is None:
-    raise RuntimeError("Gemini TTS returned no audio data.")
-
-  data = inline_part.data
-  if isinstance(data, bytes):
-    audio_bytes = data
-  else:
-    audio_bytes = base64.b64decode(data)
+  audio_bytes = base64.b64decode(audio_b64)
+  if "pcm" in mime_type or "linear16" in mime_type or mime_type == "audio/l16":
+    audio_bytes = _pcm_to_wav(audio_bytes)
   return base64.b64encode(audio_bytes).decode("utf-8")
 
 
