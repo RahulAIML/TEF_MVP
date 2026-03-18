@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import base64
+import io
+import wave
 from collections import deque
 import hashlib
 import os
@@ -344,7 +346,7 @@ def _normalize_listening_question(payload: Dict[str, Any]) -> Dict[str, Any]:
   }
 
 
-def _generate_tts_audio(script: str) -> str:
+def _generate_tts_audio(script: str) -> tuple[str, str]:
   _ensure_api_key()
   client = genai_client.Client(api_key=API_KEY)
   try:
@@ -366,11 +368,27 @@ def _generate_tts_audio(script: str) -> str:
     raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
 
   try:
-    audio_bytes = response.candidates[0].content.parts[0].inline_data.data
+    inline_data = response.candidates[0].content.parts[0].inline_data
+    audio_bytes = inline_data.data
+    mime_type = getattr(inline_data, "mime_type", None) or "audio/wav"
   except Exception as error:
     raise RuntimeError("Gemini TTS returned no audio data.") from error
 
-  return base64.b64encode(audio_bytes).decode("utf-8")
+  if mime_type == "audio/wav":
+    # Already a WAV payload
+    wav_bytes = audio_bytes
+  else:
+    # Gemini TTS often returns raw PCM; wrap into WAV container.
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as wf:
+      wf.setnchannels(1)
+      wf.setsampwidth(2)
+      wf.setframerate(24000)
+      wf.writeframes(audio_bytes)
+    wav_bytes = buffer.getvalue()
+    mime_type = "audio/wav"
+
+  return base64.b64encode(wav_bytes).decode("utf-8"), mime_type
 
 
 def _pick_domain() -> str:
@@ -527,7 +545,7 @@ Rules:
       if fingerprint in cache or fingerprint in cache_all or script_fingerprint in script_cache_all:
         last_error = RuntimeError("Duplicate listening question generated; retrying.")
         continue
-      audio_b64 = _generate_tts_audio(normalized["script"])
+      audio_b64, audio_mime = _generate_tts_audio(normalized["script"])
       cache.append(fingerprint)
       cache_all.append(fingerprint)
       script_cache_all.append(script_fingerprint)
@@ -535,6 +553,7 @@ Rules:
       RECENT_LISTENING_HASHES_ALL_GLOBAL.append(fingerprint)
       RECENT_LISTENING_SCRIPT_HASHES_ALL_GLOBAL.append(script_fingerprint)
       normalized["audio"] = audio_b64
+      normalized["audio_mime"] = audio_mime
       return ListeningQuestionResponse.model_validate(normalized)
     except Exception as error:
       last_error = error
