@@ -8,6 +8,7 @@ import type {
 import type { DashboardSummaryResponse } from "@/types/dashboard";
 import type { PassageQuizResponse, PassageResponse } from "@/types/passage";
 import type { GenerateListeningQuestionRequest, ListeningQuestion } from "@/types/listening";
+import type { ExplainTextRequest, ExplainTextResponse } from "@/types/text-helper";
 import type { AuthResponse, LoginRequest, SignupRequest } from "@/types/user";
 import { getAuthToken } from "@/lib/auth";
 
@@ -97,6 +98,19 @@ export async function generatePassageQuiz(): Promise<PassageQuizResponse> {
     cache: "no-store"
   });
   return parseResponse<PassageQuizResponse>(res);
+}
+
+
+export async function explainText(
+  payload: ExplainTextRequest
+): Promise<ExplainTextResponse> {
+  const res = await fetch(`${API_BASE_URL}/explain-text`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<ExplainTextResponse>(res);
 }
 
 export async function explainWord(

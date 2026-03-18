@@ -26,7 +26,7 @@ export default function Header({ title, subtitle }: HeaderProps) {
             <Link href="/mock-exam" className="hover:text-slate-900">
               Reading Exam
             </Link>
-            <Link href="/listening-mock-exam" className="hover:text-slate-900">
+            <Link href="/listening-exam" className="hover:text-slate-900">
               Listening Exam
             </Link>
             <Link href="/passage-analyzer" className="hover:text-slate-900">
@@ -37,7 +37,7 @@ export default function Header({ title, subtitle }: HeaderProps) {
             </Link>
           </nav>
           <Button asChild size="sm" variant="secondary">
-            <Link href="/listening-mock-exam">Start Training</Link>
+            <Link href="/listening-exam">Start Training</Link>
           </Button>
         </div>
       </div>

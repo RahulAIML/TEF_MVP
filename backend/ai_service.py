@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import base64
-import struct
 import urllib.request
 import urllib.error
 from collections import deque
@@ -14,15 +13,6 @@ import uuid
 from typing import Any, Dict, Tuple
 
 import google.generativeai as genai
-
-try:
-  from google import genai as genai_client
-  from google.genai import types as genai_types
-  _HAS_GENAI = True
-except Exception:
-  genai_client = None
-  genai_types = None
-  _HAS_GENAI = False
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -31,8 +21,10 @@ from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMean
 load_dotenv()
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
-TTS_MODEL_NAME = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
 
 DOMAINS = [
   "culture and arts",
@@ -354,67 +346,19 @@ def _normalize_listening_question(payload: Dict[str, Any]) -> Dict[str, Any]:
   }
 
 
-def _pcm_to_wav(pcm_bytes: bytes, sample_rate: int = 24000, channels: int = 1, sample_width: int = 2) -> bytes:
-  byte_rate = sample_rate * channels * sample_width
-  block_align = channels * sample_width
-  data_size = len(pcm_bytes)
-  riff_size = 36 + data_size
-  header = (
-    b"RIFF" + struct.pack("<I", riff_size) + b"WAVE" +
-    b"fmt " + struct.pack("<IHHIIHH", 16, 1, channels, sample_rate, byte_rate, block_align, sample_width * 8) +
-    b"data" + struct.pack("<I", data_size)
-  )
-  return header + pcm_bytes
+def _ensure_elevenlabs_config() -> None:
+  if not ELEVENLABS_API_KEY:
+    raise RuntimeError("Missing ELEVENLABS_API_KEY for ElevenLabs TTS.")
+  if not ELEVENLABS_VOICE_ID:
+    raise RuntimeError("Missing ELEVENLABS_VOICE_ID for ElevenLabs TTS.")
 
 
 def _generate_tts_audio(script: str) -> str:
-  _ensure_api_key()
-
-  if _HAS_GENAI:
-    client = genai_client.Client(api_key=API_KEY)
-    try:
-      response = client.models.generate_content(
-        model=TTS_MODEL_NAME,
-        contents=script,
-        config=genai_types.GenerateContentConfig(
-          response_modalities=["AUDIO"],
-          speech_config=genai_types.SpeechConfig(
-            voice_config=genai_types.VoiceConfig(
-              prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(
-                voice_name="Kore"
-              )
-            )
-          )
-        )
-      )
-    except Exception as error:
-      raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
-
-    inline = response.candidates[0].content.parts[0].inline_data
-    data = inline.data
-    if isinstance(data, bytes):
-      pcm_bytes = data
-    else:
-      pcm_bytes = base64.b64decode(data)
-    wav_bytes = _pcm_to_wav(pcm_bytes)
-    return base64.b64encode(wav_bytes).decode("utf-8")
-
-  # Fallback to REST if google-genai isn't available
-  url = f"https://generativelanguage.googleapis.com/v1beta/models/{TTS_MODEL_NAME}:generateContent"
+  _ensure_elevenlabs_config()
+  url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
   payload = {
-    "contents": [{
-      "parts": [{"text": script}]
-    }],
-    "generationConfig": {
-      "responseModalities": ["AUDIO"],
-      "speechConfig": {
-        "voiceConfig": {
-          "prebuiltVoiceConfig": {
-            "voiceName": "Kore"
-          }
-        }
-      }
-    }
+    "text": script,
+    "model_id": ELEVENLABS_MODEL_ID
   }
   data = json.dumps(payload).encode("utf-8")
   request = urllib.request.Request(
@@ -422,34 +366,19 @@ def _generate_tts_audio(script: str) -> str:
     data=data,
     headers={
       "Content-Type": "application/json",
-      "x-goog-api-key": API_KEY
+      "xi-api-key": ELEVENLABS_API_KEY,
+      "Accept": "audio/mpeg"
     }
   )
   try:
-    with urllib.request.urlopen(request, timeout=30) as response:
-      response_body = response.read().decode("utf-8")
+    with urllib.request.urlopen(request, timeout=45) as response:
+      audio_bytes = response.read()
   except urllib.error.HTTPError as error:
     body = error.read().decode("utf-8") if hasattr(error, "read") else str(error)
-    raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {body}") from error
+    raise RuntimeError(f"ElevenLabs TTS failed: {body}") from error
   except Exception as error:
-    raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
+    raise RuntimeError(f"ElevenLabs TTS failed: {error}") from error
 
-  parsed = json.loads(response_body)
-  candidates = parsed.get("candidates") or []
-  if not candidates:
-    raise RuntimeError("Gemini TTS returned no candidates.")
-  parts = (candidates[0].get("content") or {}).get("parts") or []
-  if not parts:
-    raise RuntimeError("Gemini TTS returned no audio parts.")
-  inline = parts[0].get("inlineData") or {}
-  audio_b64 = inline.get("data")
-  mime_type = inline.get("mimeType", "")
-  if not audio_b64:
-    raise RuntimeError("Gemini TTS returned empty audio data.")
-
-  audio_bytes = base64.b64decode(audio_b64)
-  if "pcm" in mime_type or "linear16" in mime_type or mime_type == "audio/l16":
-    audio_bytes = _pcm_to_wav(audio_bytes)
   return base64.b64encode(audio_bytes).decode("utf-8")
 
 
@@ -743,6 +672,36 @@ Rules:
   raise RuntimeError(
     f"Gemini response validation failed for passage quiz after retries: {last_error}"
   ) from last_error
+
+
+def explain_text(text: str) -> Dict[str, str]:
+  clean_text = text.strip()
+  prompt = f"""
+Explain this French text clearly for a TEF B2 learner.
+
+Return JSON with:
+meaning
+explanation
+translation
+example
+
+Text: {clean_text}
+
+Rules:
+- meaning: 1 to 2 simple sentences in French.
+- explanation: short French explanation, easy B2 vocabulary.
+- translation: short English translation.
+- example: a simple French example sentence.
+- Output valid JSON only.
+"""
+
+  payload = _generate_json(prompt, temperature=0.4)
+  return {
+    "meaning": str(payload.get("meaning", "")).strip(),
+    "explanation": str(payload.get("explanation", "")).strip(),
+    "translation": str(payload.get("translation", "")).strip(),
+    "example": str(payload.get("example", "")).strip()
+  }
 
 
 def explain_word(word: str) -> WordMeaningResponse:

@@ -30,7 +30,7 @@ export default function ListeningQuestionCard({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrl = useMemo(() => {
     if (!question.audio) return "";
-    return `data:audio/wav;base64,${question.audio}`;
+    return `data:audio/mpeg;base64,${question.audio}`;
   }, [question.audio]);
 
   const remainingPlays = Math.max(0, MAX_PLAYS - playCount);
@@ -52,8 +52,7 @@ export default function ListeningQuestionCard({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 rounded-md border border-slate-200 bg-slate-50/70 p-4">
-          <p className="text-sm text-slate-700">Transcript</p>
-          <p className="text-[1.02rem] leading-7 text-slate-900">{question.script}</p>
+          <p className="text-sm text-slate-700">Audio</p>
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={handlePlay} disabled={!audioUrl || remainingPlays <= 0}>
               {remainingPlays > 0 ? `Play audio (${remainingPlays} left)` : "Play limit reached"}

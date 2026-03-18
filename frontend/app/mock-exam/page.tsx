@@ -6,11 +6,14 @@ import ExamContainer from "@/components/ExamContainer";
 import ExamResults from "@/components/ExamResults";
 import QuestionCard from "@/components/QuestionCard";
 import QuestionNavigator from "@/components/QuestionNavigator";
+import TextHelperTool from "@/components/TextHelperTool";
+import TextExplanationCard from "@/components/TextExplanationCard";
 import TimerClock from "@/components/TimerClock";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { generateQuestion, submitExam } from "@/services/api";
+import { explainText, generateQuestion, submitExam } from "@/services/api";
 import type { AnswerOption, ExamQuestion, SubmitExamResponse } from "@/types/exam";
+import type { ExplainTextResponse } from "@/types/text-helper";
 
 const TOTAL_QUESTIONS = 40;
 const EXAM_DURATION_SECONDS = 60 * 60;
@@ -30,6 +33,9 @@ export default function MockExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState<SubmitExamResponse | null>(null);
   const [timeUp, setTimeUp] = useState(false);
+  const [helperText, setHelperText] = useState("");
+  const [helperResult, setHelperResult] = useState<ExplainTextResponse | null>(null);
+  const [helperLoading, setHelperLoading] = useState(false);
 
   const questionsRef = useRef<Record<number, ExamQuestion>>({});
   const inFlightRef = useRef<Partial<Record<number, Promise<ExamQuestion>>>>({});
@@ -160,6 +166,33 @@ export default function MockExamPage() {
     setAnswers((prev) => ({ ...prev, [currentQuestion]: value }));
   };
 
+
+  const normalizeSelection = (rawSelection: string) => rawSelection.replace(/\s+/g, " ").trim();
+
+  const handleExplainText = async () => {
+    if (!helperText.trim()) {
+      return;
+    }
+    setHelperLoading(true);
+    setError("");
+    try {
+      const result = await explainText({ text: helperText.trim() });
+      setHelperResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to explain text.");
+    } finally {
+      setHelperLoading(false);
+    }
+  };
+
+  const handleTextSelection = () => {
+    const selection = window.getSelection()?.toString() ?? "";
+    const chosenText = normalizeSelection(selection);
+    if (chosenText) {
+      setHelperText(chosenText);
+    }
+  };
+
   const handleTimerExpire = () => {
     if (timeUp || results) {
       return;
@@ -269,12 +302,14 @@ export default function MockExamPage() {
                 <p className="text-sm text-slate-500">Generating question...</p>
               )}
               {currentQuestionData && (
-                <QuestionCard
-                  question={currentQuestionData}
-                  selectedAnswer={currentAnswer}
-                  onSelect={handleAnswerSelect}
-                  disabled={Boolean(results) || timeUp}
-                />
+                <div onMouseUp={handleTextSelection}>
+                  <QuestionCard
+                    question={currentQuestionData}
+                    selectedAnswer={currentAnswer}
+                    onSelect={handleAnswerSelect}
+                    disabled={Boolean(results) || timeUp}
+                  />
+                </div>
               )}
               <div className="flex flex-wrap items-center gap-3">
                 <Button
@@ -297,12 +332,25 @@ export default function MockExamPage() {
               </div>
             </ExamContainer>
 
-            <QuestionNavigator
-              totalQuestions={TOTAL_QUESTIONS}
-              currentQuestion={currentQuestion}
-              answers={answers}
-              onSelect={handleSelectQuestion}
-            />
+            <div className="space-y-4">
+              <QuestionNavigator
+                totalQuestions={TOTAL_QUESTIONS}
+                currentQuestion={currentQuestion}
+                answers={answers}
+                onSelect={handleSelectQuestion}
+              />
+              <Card className="border-slate-200 shadow-soft">
+                <CardContent className="p-5">
+                  <TextHelperTool
+                    text={helperText}
+                    onTextChange={setHelperText}
+                    onExplain={handleExplainText}
+                    isLoading={helperLoading}
+                  />
+                </CardContent>
+              </Card>
+              {helperResult && <TextExplanationCard entry={helperResult} />}
+            </div>
           </div>
         )}
 

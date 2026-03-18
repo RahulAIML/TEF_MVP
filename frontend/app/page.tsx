@@ -18,8 +18,8 @@ const modules = [
   },
   {
     title: "Listening Mock Exam",
-    description: "Practice listening comprehension with Gemini-generated audio MCQs.",
-    href: "/listening-mock-exam"
+    description: "Practice listening comprehension with ElevenLabs-generated audio MCQs.",
+    href: "/listening-exam"
   },
   {
     title: "Performance Dashboard",

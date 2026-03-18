@@ -3,7 +3,6 @@
 import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 interface TextHelperToolProps {
   text: string;
@@ -21,8 +20,9 @@ export default function TextHelperTool({
   return (
     <div className="space-y-3">
       <label className="text-sm font-medium text-slate-800">Text Helper Tool</label>
-      <Input
-        placeholder="Select a word or phrase to explain"
+      <textarea
+        className="min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-slate-900 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-300"
+        placeholder="Type or paste any word, phrase, or paragraph to explain"
         value={text}
         onChange={(event) => onTextChange(event.target.value)}
       />

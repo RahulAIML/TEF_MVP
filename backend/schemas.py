@@ -149,6 +149,17 @@ class ListeningQuestionResponse(BaseModel):
     return options
 
 
+class ExplainTextRequest(BaseModel):
+  text: str = Field(min_length=1)
+
+
+class ExplainTextResponse(BaseModel):
+  meaning: str
+  explanation: str
+  translation: str
+  example: str
+
+
 class SignupRequest(BaseModel):
   email: str = Field(min_length=5, max_length=255)
   password: str = Field(min_length=8, max_length=128)

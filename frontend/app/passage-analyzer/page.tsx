@@ -2,20 +2,20 @@
 
 import { useMemo, useState } from "react";
 import Header from "@/components/Header";
-import DictionaryCard from "@/components/DictionaryCard";
+import TextExplanationCard from "@/components/TextExplanationCard";
 import ReadingPanel from "@/components/ReadingPanel";
 import TextHelperTool from "@/components/TextHelperTool";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { explainWord, generatePassageQuiz } from "@/services/api";
-import type { WordMeaningResponse } from "@/types/dictionary";
+import { explainText, generatePassageQuiz } from "@/services/api";
+import type { ExplainTextResponse } from "@/types/text-helper";
 import type { PassageQuizQuestion, PassageQuizResponse } from "@/types/passage";
 import type { AnswerOption } from "@/types/exam";
 
 export default function PassageAnalyzerPage() {
   const [quiz, setQuiz] = useState<PassageQuizResponse | null>(null);
   const [lookupText, setLookupText] = useState("");
-  const [wordDetails, setWordDetails] = useState<WordMeaningResponse | null>(null);
+  const [explanationDetails, setExplanationDetails] = useState<ExplainTextResponse | null>(null);
   const [loadingPassage, setLoadingPassage] = useState(false);
   const [loadingHelper, setLoadingHelper] = useState(false);
   const [error, setError] = useState("");
@@ -41,7 +41,7 @@ export default function PassageAnalyzerPage() {
       const result = await generatePassageQuiz();
       setQuiz(result);
       setLookupText("");
-      setWordDetails(null);
+      setExplanationDetails(null);
       setQuizAnswers({});
       setQuizSubmitted(false);
       setQuizScore(0);
@@ -60,8 +60,8 @@ export default function PassageAnalyzerPage() {
     setLoadingHelper(true);
     setError("");
     try {
-      const result = await explainWord({ word: lookupText.trim() });
-      setWordDetails(result);
+      const result = await explainText({ text: lookupText.trim() });
+      setExplanationDetails(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to explain text.");
     } finally {
@@ -140,7 +140,7 @@ export default function PassageAnalyzerPage() {
                   />
                 </CardContent>
               </Card>
-              {wordDetails && <DictionaryCard entry={wordDetails} />}
+              {explanationDetails && <TextExplanationCard entry={explanationDetails} />}
             </aside>
           </div>
         )}
