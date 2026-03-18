@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import json
 import base64
-import urllib.request
-import urllib.error
 from collections import deque
 import hashlib
 import os
@@ -13,6 +11,8 @@ import uuid
 from typing import Any, Dict, Tuple
 
 import google.generativeai as genai
+from google import genai as genai_client
+from google.genai import types
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -22,9 +22,7 @@ load_dotenv()
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
-ELEVENLABS_MODEL_ID = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
+TTS_MODEL_NAME = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-tts")
 
 DOMAINS = [
   "culture and arts",
@@ -346,38 +344,31 @@ def _normalize_listening_question(payload: Dict[str, Any]) -> Dict[str, Any]:
   }
 
 
-def _ensure_elevenlabs_config() -> None:
-  if not ELEVENLABS_API_KEY:
-    raise RuntimeError("Missing ELEVENLABS_API_KEY for ElevenLabs TTS.")
-  if not ELEVENLABS_VOICE_ID:
-    raise RuntimeError("Missing ELEVENLABS_VOICE_ID for ElevenLabs TTS.")
-
-
 def _generate_tts_audio(script: str) -> str:
-  _ensure_elevenlabs_config()
-  url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
-  payload = {
-    "text": script,
-    "model_id": ELEVENLABS_MODEL_ID
-  }
-  data = json.dumps(payload).encode("utf-8")
-  request = urllib.request.Request(
-    url,
-    data=data,
-    headers={
-      "Content-Type": "application/json",
-      "xi-api-key": ELEVENLABS_API_KEY,
-      "Accept": "audio/mpeg"
-    }
-  )
+  _ensure_api_key()
+  client = genai_client.Client(api_key=API_KEY)
   try:
-    with urllib.request.urlopen(request, timeout=45) as response:
-      audio_bytes = response.read()
-  except urllib.error.HTTPError as error:
-    body = error.read().decode("utf-8") if hasattr(error, "read") else str(error)
-    raise RuntimeError(f"ElevenLabs TTS failed: {body}") from error
+    response = client.models.generate_content(
+      model=TTS_MODEL_NAME,
+      contents=script,
+      config=types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(
+          voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+              voice_name="Kore"
+            )
+          )
+        )
+      )
+    )
   except Exception as error:
-    raise RuntimeError(f"ElevenLabs TTS failed: {error}") from error
+    raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
+
+  try:
+    audio_bytes = response.candidates[0].content.parts[0].inline_data.data
+  except Exception as error:
+    raise RuntimeError("Gemini TTS returned no audio data.") from error
 
   return base64.b64encode(audio_bytes).decode("utf-8")
 
