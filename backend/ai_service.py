@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import json
-import base64
-import io
-import wave
+import requests
 from collections import deque
 import hashlib
 import os
@@ -13,8 +11,6 @@ import uuid
 from typing import Any, Dict, Tuple
 
 import google.generativeai as genai
-from google import genai as genai_client
-from google.genai import types
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -24,7 +20,9 @@ load_dotenv()
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
-TTS_MODEL_NAME = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+AUDIO_STORAGE_PATH = os.getenv("AUDIO_STORAGE_PATH", os.path.join(os.path.dirname(__file__), "data", "audio"))
 
 DOMAINS = [
   "culture and arts",
@@ -346,50 +344,32 @@ def _normalize_listening_question(payload: Dict[str, Any]) -> Dict[str, Any]:
   }
 
 
-def _generate_tts_audio(script: str) -> tuple[str, str]:
-  _ensure_api_key()
-  client = genai_client.Client(api_key=API_KEY)
-  try:
-    response = client.models.generate_content(
-      model=TTS_MODEL_NAME,
-      contents=script,
-      config=types.GenerateContentConfig(
-        response_modalities=["AUDIO"],
-        speech_config=types.SpeechConfig(
-          voice_config=types.VoiceConfig(
-            prebuilt_voice_config=types.PrebuiltVoiceConfig(
-              voice_name="Kore"
-            )
-          )
-        )
-      )
-    )
-  except Exception as error:
-    raise RuntimeError(f"Gemini TTS failed with model '{TTS_MODEL_NAME}': {error}") from error
+def _ensure_elevenlabs_config() -> None:
+  if not ELEVENLABS_API_KEY:
+    raise RuntimeError("Missing ELEVENLABS_API_KEY for ElevenLabs TTS.")
+  if not ELEVENLABS_VOICE_ID:
+    raise RuntimeError("Missing ELEVENLABS_VOICE_ID for ElevenLabs TTS.")
+
+
+def _generate_tts_audio(script: str, question_number: int, session_id: str | None) -> str:
+  _ensure_elevenlabs_config()
+  os.makedirs(AUDIO_STORAGE_PATH, exist_ok=True)
+  url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+  payload = {"text": script, "model_id": "eleven_multilingual_v2"}
+  headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
 
   try:
-    inline_data = response.candidates[0].content.parts[0].inline_data
-    audio_bytes = inline_data.data
-    mime_type = getattr(inline_data, "mime_type", None) or "audio/wav"
-  except Exception as error:
-    raise RuntimeError("Gemini TTS returned no audio data.") from error
+    response = requests.post(url, headers=headers, json=payload, timeout=45)
+    response.raise_for_status()
+  except requests.RequestException as error:
+    raise RuntimeError(f"ElevenLabs TTS failed: {error}") from error
 
-  if mime_type == "audio/wav":
-    # Already a WAV payload
-    wav_bytes = audio_bytes
-  else:
-    # Gemini TTS often returns raw PCM; wrap into WAV container.
-    buffer = io.BytesIO()
-    with wave.open(buffer, "wb") as wf:
-      wf.setnchannels(1)
-      wf.setsampwidth(2)
-      wf.setframerate(24000)
-      wf.writeframes(audio_bytes)
-    wav_bytes = buffer.getvalue()
-    mime_type = "audio/wav"
+  file_name = f"listening_q{question_number}_{session_id or 'global'}_{uuid.uuid4().hex[:8]}.mp3"
+  file_path = os.path.join(AUDIO_STORAGE_PATH, file_name)
+  with open(file_path, "wb") as audio_file:
+    audio_file.write(response.content)
 
-  return base64.b64encode(wav_bytes).decode("utf-8"), mime_type
-
+  return f"/audio/{file_name}"
 
 def _pick_domain() -> str:
   global _last_domain
@@ -545,15 +525,14 @@ Rules:
       if fingerprint in cache or fingerprint in cache_all or script_fingerprint in script_cache_all:
         last_error = RuntimeError("Duplicate listening question generated; retrying.")
         continue
-      audio_b64, audio_mime = _generate_tts_audio(normalized["script"])
+      audio_url = _generate_tts_audio(normalized["script"], question_number, session_id)
       cache.append(fingerprint)
       cache_all.append(fingerprint)
       script_cache_all.append(script_fingerprint)
       RECENT_LISTENING_HASHES_GLOBAL.append(fingerprint)
       RECENT_LISTENING_HASHES_ALL_GLOBAL.append(fingerprint)
       RECENT_LISTENING_SCRIPT_HASHES_ALL_GLOBAL.append(script_fingerprint)
-      normalized["audio"] = audio_b64
-      normalized["audio_mime"] = audio_mime
+      normalized["audio_url"] = audio_url
       return ListeningQuestionResponse.model_validate(normalized)
     except Exception as error:
       last_error = error
@@ -687,12 +666,12 @@ Rules:
 def explain_text(text: str) -> Dict[str, str]:
   clean_text = text.strip()
   prompt = f"""
-Explain this French text clearly for a TEF B2 learner.
+Explain this French text clearly for a TEF learner.
 
 Return JSON with:
 meaning
-explanation
 translation
+explanation
 example
 
 Text: {clean_text}

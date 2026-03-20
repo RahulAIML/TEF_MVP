@@ -9,13 +9,13 @@ interface DashboardStatsProps {
 export default function DashboardStats({ summary }: DashboardStatsProps) {
   return (
     <div className="grid gap-6 lg:grid-cols-3">
-      <div className="rounded-md border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-slate-500">Reading Accuracy</p>
         <h3 className="mt-2 text-3xl font-semibold text-slate-900">
           {summary.average_accuracy}%
         </h3>
       </div>
-      <div className="rounded-md border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-slate-500">Recent Exams</p>
         <div className="mt-3 space-y-2 text-sm text-slate-700">
           {summary.recent_exams.length === 0 ? (
@@ -30,7 +30,7 @@ export default function DashboardStats({ summary }: DashboardStatsProps) {
           )}
         </div>
       </div>
-      <div className="rounded-md border border-slate-200 bg-white p-5 shadow-soft">
+      <div className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-sm text-slate-500">Weakest Area</p>
         <h3 className="mt-2 text-lg font-semibold text-slate-900">
           {summary.weakest_question_type}

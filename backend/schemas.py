@@ -135,8 +135,7 @@ class GenerateListeningQuestionRequest(BaseModel):
 
 class ListeningQuestionResponse(BaseModel):
   script: str
-  audio: str
-  audio_mime: str | None = None
+  audio_url: str
   question: str
   options: List[str] = Field(default_factory=list)
   correct_answer: AnswerOption

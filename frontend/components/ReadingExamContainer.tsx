@@ -18,7 +18,7 @@ export default function ReadingExamContainer({
   children
 }: ReadingExamContainerProps) {
   return (
-    <Card className="border-slate-200 shadow-soft">
+    <Card className="border-slate-200 shadow-sm">
       <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <CardTitle className="text-slate-900">Reading Exam</CardTitle>

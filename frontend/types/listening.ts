@@ -7,8 +7,7 @@ export interface GenerateListeningQuestionRequest {
 
 export interface ListeningQuestion {
   script: string;
-  audio: string;
-  audio_mime?: string;
+  audio_url: string;
   question: string;
   options: string[];
   correct_answer: AnswerOption;

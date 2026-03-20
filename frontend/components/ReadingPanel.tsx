@@ -26,7 +26,7 @@ export default function ReadingPanel({
   };
 
   return (
-    <Card className="border-slate-200 shadow-soft">
+    <Card className="border-slate-200 shadow-sm">
       <CardHeader>
         <CardTitle className="text-slate-900">{title}</CardTitle>
         <CardDescription>

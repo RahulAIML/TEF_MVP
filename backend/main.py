@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import init_db
@@ -15,6 +17,10 @@ from routers.listening_routes import router as listening_router
 load_dotenv()
 
 app = FastAPI(title="TEF Reading Comprehension API", version="0.1.0")
+
+AUDIO_DIR = Path(__file__).resolve().parent / "data" / "audio"
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/audio", StaticFiles(directory=str(AUDIO_DIR)), name="audio")
 
 configured_origins = [
   origin.strip()

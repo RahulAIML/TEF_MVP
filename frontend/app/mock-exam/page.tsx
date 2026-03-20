@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Header from "@/components/Header";
+import AppShell from "@/components/AppShell";
 import ExamContainer from "@/components/ExamContainer";
 import ExamResults from "@/components/ExamResults";
 import QuestionCard from "@/components/QuestionCard";
@@ -253,11 +253,10 @@ export default function MockExamPage() {
   const currentAnswer = answers[currentQuestion] ?? "";
 
   return (
-    <div className="min-h-screen">
-      <Header subtitle="Complete the full 40-question reading mock exam" />
-      <main className="container space-y-6 py-8">
+    <AppShell title="Reading Mock Exam" subtitle="Complete the full 40-question reading mock exam">
+      <div className="space-y-6">
         {!isExamStarted ? (
-          <Card className="border-slate-200 shadow-soft">
+          <Card className="border-slate-200 shadow-sm">
             <CardContent className="p-6">
               <h2 className="text-2xl font-semibold text-slate-900">Reading Mock Exam</h2>
               <p className="mt-2 text-sm text-slate-600">
@@ -302,7 +301,7 @@ export default function MockExamPage() {
                 <p className="text-sm text-slate-500">Generating question...</p>
               )}
               {currentQuestionData && (
-                <div onMouseUp={handleTextSelection}>
+                <div onMouseUp={handleTextSelection} className="mx-auto w-full max-w-3xl">
                   <QuestionCard
                     question={currentQuestionData}
                     selectedAnswer={currentAnswer}
@@ -339,7 +338,7 @@ export default function MockExamPage() {
                 answers={answers}
                 onSelect={handleSelectQuestion}
               />
-              <Card className="border-slate-200 shadow-soft">
+              <Card className="border-slate-200 shadow-sm">
                 <CardContent className="p-5">
                   <TextHelperTool
                     text={helperText}
@@ -362,7 +361,7 @@ export default function MockExamPage() {
             <ExamResults results={results} questions={questions} />
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

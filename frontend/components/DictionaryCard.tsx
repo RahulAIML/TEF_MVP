@@ -7,7 +7,7 @@ interface DictionaryCardProps {
 
 export default function DictionaryCard({ entry }: DictionaryCardProps) {
   return (
-    <Card className="border-slate-200 shadow-soft">
+    <Card className="border-slate-200 shadow-sm">
       <CardHeader className="pb-4">
         <CardTitle className="text-slate-900">
           {entry.word}

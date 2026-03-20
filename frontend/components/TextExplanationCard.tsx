@@ -7,7 +7,7 @@ interface TextExplanationCardProps {
 
 export default function TextExplanationCard({ entry }: TextExplanationCardProps) {
   return (
-    <Card className="border-slate-200 shadow-soft">
+    <Card className="border-slate-200 shadow-sm rounded-2xl">
       <CardHeader className="pb-3">
         <CardTitle className="text-slate-900">Text Explanation</CardTitle>
       </CardHeader>

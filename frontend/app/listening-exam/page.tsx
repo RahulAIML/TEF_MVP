@@ -1,24 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Header from "@/components/Header";
+import AppShell from "@/components/AppShell";
 import ExamContainer from "@/components/ExamContainer";
 import ListeningQuestionCard from "@/components/ListeningQuestionCard";
 import ListeningResults from "@/components/ListeningResults";
 import QuestionNavigator from "@/components/QuestionNavigator";
+import TextHelperTool from "@/components/TextHelperTool";
+import TextExplanationCard from "@/components/TextExplanationCard";
 import TimerClock from "@/components/TimerClock";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { generateListeningQuestion } from "@/services/api";
 import type { AnswerOption } from "@/types/exam";
+import type { ExplainTextResponse } from "@/types/text-helper";
 import type { ListeningQuestion, ListeningSubmitResult } from "@/types/listening";
+import { explainText } from "@/services/api";
 
 const TOTAL_QUESTIONS = 40;
 const EXAM_DURATION_SECONDS = 60 * 60;
 const PREFETCH_AHEAD = 2;
-const MAX_PLAYS = 2;
 
-export default function ListeningMockExamPage() {
+export default function ListeningExamPage() {
+  const [mode, setMode] = useState<"practice" | "exam">("exam");
+  const [showTranscript, setShowTranscript] = useState(false);
+
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState(1);
   const [questions, setQuestions] = useState<Record<number, ListeningQuestion>>({});
@@ -34,13 +40,44 @@ export default function ListeningMockExamPage() {
   const [results, setResults] = useState<ListeningSubmitResult | null>(null);
   const [timeUp, setTimeUp] = useState(false);
 
+  const [practiceQuestion, setPracticeQuestion] = useState<ListeningQuestion | null>(null);
+  const [practiceAnswer, setPracticeAnswer] = useState<AnswerOption | "">("");
+  const [practiceCount, setPracticeCount] = useState(1);
+
+  const [helperText, setHelperText] = useState("");
+  const [helperResult, setHelperResult] = useState<ExplainTextResponse | null>(null);
+  const [helperLoading, setHelperLoading] = useState(false);
+
   const questionsRef = useRef<Record<number, ListeningQuestion>>({});
   const inFlightRef = useRef<Partial<Record<number, Promise<ListeningQuestion>>>>({});
   const examSessionIdRef = useRef<string | null>(null);
+  const practiceSessionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     questionsRef.current = questions;
   }, [questions]);
+
+  useEffect(() => {
+    if (mode === "practice") {
+      setShowTranscript(true);
+    } else {
+      setShowTranscript(false);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === "practice") {
+      setIsExamStarted(false);
+      setResults(null);
+      setTimeUp(false);
+      setTimerActive(false);
+      setSubmitNote("");
+      setError("");
+    } else {
+      setPracticeQuestion(null);
+      setPracticeAnswer("");
+    }
+  }, [mode]);
 
   const ensureQuestion = async (questionNumber: number, showLoader = true) => {
     const existing = questionsRef.current[questionNumber];
@@ -201,9 +238,55 @@ export default function ListeningMockExamPage() {
   const handlePlay = (questionNumber: number) => {
     setPlayCounts((prev) => {
       const current = prev[questionNumber] ?? 0;
-      if (current >= MAX_PLAYS) return prev;
+      if (current >= 2) return prev;
       return { ...prev, [questionNumber]: current + 1 };
     });
+  };
+
+  const loadPracticeQuestion = async () => {
+    const sessionId = practiceSessionIdRef.current
+      ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+    practiceSessionIdRef.current = sessionId;
+
+    setError("");
+    setLoadingQuestion(true);
+    try {
+      const question = await generateListeningQuestion({
+        question_number: practiceCount,
+        session_id: sessionId
+      });
+      setPracticeQuestion(question);
+      setPracticeAnswer("");
+      setPracticeCount((prev) => prev + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load practice question.");
+    } finally {
+      setLoadingQuestion(false);
+    }
+  };
+
+  const handlePracticeAnswer = (value: AnswerOption) => {
+    setPracticeAnswer(value);
+  };
+
+  const handleExplainText = async () => {
+    if (!helperText.trim()) return;
+    setHelperLoading(true);
+    setError("");
+    try {
+      const result = await explainText({ text: helperText.trim() });
+      setHelperResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to explain text.");
+    } finally {
+      setHelperLoading(false);
+    }
+  };
+
+  const handleTranscriptSelection = (text: string) => {
+    setHelperText(text);
   };
 
   const currentQuestionData = questions[currentQuestion];
@@ -213,23 +296,93 @@ export default function ListeningMockExamPage() {
   const questionNavigatorAnswers = useMemo(() => answers, [answers]);
 
   return (
-    <div className="min-h-screen">
-      <Header subtitle="Complete the full 40-question listening mock exam" />
-      <main className="container space-y-6 py-8">
-        {!isExamStarted ? (
-          <Card className="border-slate-200 shadow-soft">
-            <CardContent className="p-6">
-              <h2 className="text-2xl font-semibold text-slate-900">Listening Mock Exam</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                This mock exam includes 40 questions and a 60-minute timer. Questions are generated as you move
-                through the exam. Each audio can be played up to two times.
-              </p>
-              <Button className="mt-4" onClick={handleStartExam}>
-                Start Listening Exam
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
+    <AppShell title="Listening Module" subtitle="Practice or take a full mock listening exam">
+      <div className="space-y-6">
+        <div className="flex flex-wrap gap-3">
+          <Button
+            variant={mode === "practice" ? "default" : "outline"}
+            onClick={() => setMode("practice")}
+          >
+            Practice Mode
+          </Button>
+          <Button
+            variant={mode === "exam" ? "default" : "outline"}
+            onClick={() => setMode("exam")}
+          >
+            Mock Exam Mode
+          </Button>
+        </div>
+
+        {mode === "practice" && (
+          <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+            <div className="space-y-4">
+              {!practiceQuestion ? (
+                <Card className="border-slate-200 shadow-sm rounded-2xl">
+                  <CardContent className="p-6">
+                    <h2 className="text-xl font-semibold text-slate-900">Listening Practice</h2>
+                    <p className="mt-2 text-sm text-slate-600">
+                      Practice one question at a time. Transcript is enabled by default and explanations
+                      appear as soon as you answer.
+                    </p>
+                    <Button className="mt-4" onClick={loadPracticeQuestion}>
+                      Start Practice
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {loadingQuestion && (
+                    <p className="text-sm text-slate-500">Loading practice question...</p>
+                  )}
+                  <ListeningQuestionCard
+                    question={practiceQuestion}
+                    questionNumber={practiceCount - 1}
+                    selectedAnswer={practiceAnswer}
+                    onSelect={handlePracticeAnswer}
+                    showTranscript={showTranscript}
+                    onToggleTranscript={() => setShowTranscript((prev) => !prev)}
+                    onTranscriptSelect={handleTranscriptSelection}
+                  />
+                  {practiceAnswer && (
+                    <Card className="border-slate-200 shadow-sm rounded-2xl">
+                      <CardContent className="p-6">
+                        <p className="text-sm font-medium text-slate-900">Explanation</p>
+                        <p className="mt-2 text-sm text-slate-700">{practiceQuestion.explanation}</p>
+                        <div className="mt-3 text-sm text-slate-600">
+                          Correct Answer: <span className="font-semibold text-slate-900">{practiceQuestion.correct_answer}</span>
+                        </div>
+                        <Button className="mt-4" onClick={loadPracticeQuestion}>
+                          Next Practice Question
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="space-y-4">
+              <Card className="border-slate-200 shadow-sm rounded-2xl">
+                <CardContent className="p-6">
+                  <p className="text-sm font-medium text-slate-900">Practice Mode</p>
+                  <p className="mt-2 text-sm text-slate-600">One question at a time with transcript enabled.</p>
+                </CardContent>
+              </Card>
+              <Card className="border-slate-200 shadow-sm rounded-2xl">
+                <CardContent className="p-5">
+                  <TextHelperTool
+                    text={helperText}
+                    onTextChange={setHelperText}
+                    onExplain={handleExplainText}
+                    isLoading={helperLoading}
+                  />
+                </CardContent>
+              </Card>
+              {helperResult && <TextExplanationCard entry={helperResult} />}
+            </div>
+          </div>
+        )}
+
+        {mode === "exam" && (
           <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
             <ExamContainer
               currentQuestion={currentQuestion}
@@ -244,62 +397,95 @@ export default function ListeningMockExamPage() {
                 />
               }
             >
-              {timeUp && (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                  Time is up. Your exam has been submitted.
+              {!isExamStarted ? (
+                <Card className="border-slate-200 shadow-sm rounded-2xl">
+                  <CardContent className="p-6">
+                    <h2 className="text-xl font-semibold text-slate-900">Listening Mock Exam</h2>
+                    <p className="mt-2 text-sm text-slate-600">
+                      40 questions ? 60 minutes ? Transcript is off by default.
+                    </p>
+                    <Button className="mt-4" onClick={handleStartExam}>
+                      Start Exam
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4">
+                  {timeUp && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      Time is up. Your exam has been submitted.
+                    </div>
+                  )}
+                  {submitNote && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      {submitNote}
+                    </div>
+                  )}
+                  {error && (
+                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                      {error}
+                    </div>
+                  )}
+                  {loadingQuestion && (
+                    <p className="text-sm text-slate-500">Generating question...</p>
+                  )}
+                  {currentQuestionData && (
+                    <ListeningQuestionCard
+                      question={currentQuestionData}
+                      questionNumber={currentQuestion}
+                      selectedAnswer={currentAnswer}
+                      onSelect={handleAnswerSelect}
+                      disabled={Boolean(results) || timeUp}
+                      maxPlays={2}
+                      playCount={currentPlays}
+                      onPlay={() => handlePlay(currentQuestion)}
+                      showTranscript={showTranscript}
+                      onToggleTranscript={() => setShowTranscript((prev) => !prev)}
+                      onTranscriptSelect={handleTranscriptSelection}
+                    />
+                  )}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleSelectQuestion(Math.max(1, currentQuestion - 1))}
+                      disabled={currentQuestion === 1}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleSelectQuestion(Math.min(TOTAL_QUESTIONS, currentQuestion + 1))}
+                      disabled={currentQuestion === TOTAL_QUESTIONS}
+                    >
+                      Next
+                    </Button>
+                    <Button onClick={handleSubmitExam} disabled={isSubmitting || Boolean(results)}>
+                      {isSubmitting ? "Submitting..." : "Submit Exam"}
+                    </Button>
+                  </div>
                 </div>
               )}
-              {submitNote && (
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  {submitNote}
-                </div>
-              )}
-              {error && (
-                <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-                  {error}
-                </div>
-              )}
-              {loadingQuestion && (
-                <p className="text-sm text-slate-500">Generating question...</p>
-              )}
-              {currentQuestionData && (
-                <ListeningQuestionCard
-                  question={currentQuestionData}
-                  questionNumber={currentQuestion}
-                  selectedAnswer={currentAnswer}
-                  playCount={currentPlays}
-                  onPlay={() => handlePlay(currentQuestion)}
-                  onSelect={handleAnswerSelect}
-                  disabled={Boolean(results) || timeUp}
-                />
-              )}
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => handleSelectQuestion(Math.max(1, currentQuestion - 1))}
-                  disabled={currentQuestion === 1}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => handleSelectQuestion(Math.min(TOTAL_QUESTIONS, currentQuestion + 1))}
-                  disabled={currentQuestion === TOTAL_QUESTIONS}
-                >
-                  Next
-                </Button>
-                <Button onClick={handleSubmitExam} disabled={isSubmitting || Boolean(results)}>
-                  {isSubmitting ? "Submitting..." : "Submit Exam"}
-                </Button>
-              </div>
             </ExamContainer>
 
-            <QuestionNavigator
-              totalQuestions={TOTAL_QUESTIONS}
-              currentQuestion={currentQuestion}
-              answers={questionNavigatorAnswers}
-              onSelect={handleSelectQuestion}
-            />
+            <div className="space-y-4">
+              <QuestionNavigator
+                totalQuestions={TOTAL_QUESTIONS}
+                currentQuestion={currentQuestion}
+                answers={questionNavigatorAnswers}
+                onSelect={handleSelectQuestion}
+              />
+              <Card className="border-slate-200 shadow-sm rounded-2xl">
+                <CardContent className="p-5">
+                  <TextHelperTool
+                    text={helperText}
+                    onTextChange={setHelperText}
+                    onExplain={handleExplainText}
+                    isLoading={helperLoading}
+                  />
+                </CardContent>
+              </Card>
+              {helperResult && <TextExplanationCard entry={helperResult} />}
+            </div>
           </div>
         )}
 
@@ -311,7 +497,7 @@ export default function ListeningMockExamPage() {
             results={results.results}
           />
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

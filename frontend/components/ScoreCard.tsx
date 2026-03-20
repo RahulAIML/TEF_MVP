@@ -7,7 +7,7 @@ interface ScoreCardProps {
 
 export default function ScoreCard({ scoreData }: ScoreCardProps) {
   return (
-    <Card className="border-slate-200 shadow-soft">
+    <Card className="border-slate-200 shadow-sm">
       <CardHeader>
         <CardTitle className="text-slate-900">
           Score: {scoreData.score}/{scoreData.total}

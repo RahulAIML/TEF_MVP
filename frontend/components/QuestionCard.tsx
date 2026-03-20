@@ -17,7 +17,7 @@ export default function QuestionCard({
 }: QuestionCardProps) {
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-slate-200 bg-slate-50/70 p-5 text-[1.02rem] leading-7 text-slate-800">
+      <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-5 text-[1.02rem] leading-7 text-slate-800">
         {question.text}
       </div>
       <div>
@@ -30,9 +30,9 @@ export default function QuestionCard({
             return (
               <label
                 key={`${question.question_number}-option-${index}`}
-                className={`flex cursor-pointer items-start gap-3 rounded-md border px-4 py-3 text-sm transition ${
+                className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-sm transition ${
                   isSelected
-                    ? "border-slate-900 bg-slate-900 text-white"
+                    ? "border-indigo-600 bg-indigo-600 text-white"
                     : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
                 } ${disabled ? "cursor-not-allowed opacity-70" : ""}`}
               >

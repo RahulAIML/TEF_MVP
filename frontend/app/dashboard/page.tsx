@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Header from "@/components/Header";
-import DashboardStats from "@/components/DashboardStats";
+import AppShell from "@/components/AppShell";
+import DashboardCharts from "@/components/DashboardCharts";
 import { Card, CardContent } from "@/components/ui/card";
 import { getDashboardSummary } from "@/services/api";
 import type { DashboardSummaryResponse } from "@/types/dashboard";
@@ -29,11 +29,10 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <div className="min-h-screen">
-      <Header subtitle="Track your progress and weakest areas" />
-      <main className="container space-y-6 py-8">
+    <AppShell title="Dashboard" subtitle="Track your progress and weakest areas">
+      <div className="space-y-6">
         {loading && (
-          <Card className="border-slate-200 shadow-soft">
+          <Card className="border-slate-200 shadow-sm">
             <CardContent className="p-6 text-sm text-slate-600">Loading summary...</CardContent>
           </Card>
         )}
@@ -42,8 +41,8 @@ export default function DashboardPage() {
             {error}
           </div>
         )}
-        {summary && <DashboardStats summary={summary} />}
-      </main>
-    </div>
+        {summary && <DashboardCharts summary={summary} />}
+      </div>
+    </AppShell>
   );
 }

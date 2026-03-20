@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Header from "@/components/Header";
+import AppShell from "@/components/AppShell";
 import TextExplanationCard from "@/components/TextExplanationCard";
 import ReadingPanel from "@/components/ReadingPanel";
 import TextHelperTool from "@/components/TextHelperTool";
@@ -99,10 +99,9 @@ export default function PassageAnalyzerPage() {
   };
 
   return (
-    <div className="min-h-screen">
-      <Header subtitle="Analyze passages and explain selected text" />
-      <main className="container space-y-6 py-8">
-        <Card className="border-slate-200 shadow-soft">
+    <AppShell title="Passage Analyzer" subtitle="Analyze passages and explain selected text">
+      <div className="space-y-6">
+        <Card className="border-slate-200 shadow-sm">
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-6">
             <div>
               <h2 className="text-xl font-semibold text-slate-900">Passage Analyzer</h2>
@@ -130,7 +129,7 @@ export default function PassageAnalyzerPage() {
               onTextHighlight={(text) => setLookupText(text)}
             />
             <aside className="space-y-4">
-              <Card className="border-slate-200 shadow-soft">
+              <Card className="border-slate-200 shadow-sm">
                 <CardContent className="p-5">
                   <TextHelperTool
                     text={lookupText}
@@ -146,7 +145,7 @@ export default function PassageAnalyzerPage() {
         )}
 
         {quiz && (
-          <Card className="border-slate-200 shadow-soft">
+          <Card className="border-slate-200 shadow-sm">
             <CardContent className="space-y-5 p-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -209,7 +208,7 @@ export default function PassageAnalyzerPage() {
         )}
 
         {quizSubmitted && (
-          <Card className="border-slate-200 shadow-soft">
+          <Card className="border-slate-200 shadow-sm">
             <CardContent className="space-y-4 p-6">
               <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                 Answers submitted successfully.
@@ -246,7 +245,7 @@ export default function PassageAnalyzerPage() {
             </CardContent>
           </Card>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

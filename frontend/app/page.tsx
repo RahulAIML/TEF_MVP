@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import Header from "@/components/Header";
+import AppShell from "@/components/AppShell";
 import { Card, CardContent } from "@/components/ui/card";
 
 const modules = [
@@ -30,12 +30,11 @@ const modules = [
 
 export default function HomePage() {
   return (
-    <div className="min-h-screen">
-      <Header subtitle="Choose a module to start training" />
-      <main className="container space-y-6 py-8">
+    <AppShell title="Home" subtitle="Choose a module to start training">
+      <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-3">
           {modules.map((module) => (
-            <Card key={module.title} className="border-slate-200 shadow-soft">
+            <Card key={module.title} className="border-slate-200 shadow-sm">
               <CardContent className="p-6">
                 <h3 className="text-lg font-semibold text-slate-900">{module.title}</h3>
                 <p className="mt-2 text-sm text-slate-600">{module.description}</p>
@@ -52,7 +51,7 @@ export default function HomePage() {
         <p className="text-sm text-slate-500">
           Demo mode: login is disabled for now.
         </p>
-      </main>
-    </div>
+      </div>
+    </AppShell>
   );
 }

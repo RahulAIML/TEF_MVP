@@ -12,7 +12,7 @@ export default function ExamResults({ results, questions }: ExamResultsProps) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-md border border-slate-200 bg-white p-4 shadow-soft">
+      <div className="rounded-md border border-slate-200 bg-white p-4 shadow-sm">
         <h3 className="text-lg font-semibold text-slate-900">Exam Results</h3>
         <p className="mt-2 text-sm text-slate-600">
           Score: <span className="font-semibold text-slate-900">{results.score}</span> / {results.total}
