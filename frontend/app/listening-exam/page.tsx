@@ -230,70 +230,26 @@ export default function ListeningExamPage() {
   };
 
   const handleSubmitExam = async () => {
-    if (confirmPartial && !forceSubmit) {
-      return;
-    }
-    if (confirmPartial && forceSubmit) {
-      setConfirmPartial(false);
-    }
-
     if (isSubmitting || results) return;
     if (!startedAt) {
       setError("Exam has not started.");
       return;
     }
-    setIsSubmitting(true);
-    setError("");
-    setSubmitNote("");
-    setTimerActive(false);
 
-    try {
-      const questionList = Object.entries(questionsRef.current)
-        .map(([num, question]) => ({ number: Number(num), question }))
-        .sort((a, b) => a.number - b.number);
+    const questionList = Object.entries(questionsRef.current)
+      .map(([num, question]) => ({ number: Number(num), question }))
+      .sort((a, b) => a.number - b.number);
 
-      if (questionList.length < TOTAL_QUESTIONS) {
-        const note =
-          `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
-          "Score is based only on generated questions.";
-        setSubmitNote(note);
-        if (!forceSubmit) {
-          setConfirmPartial(true);
-          setIsSubmitting(false);
-          return;
-        }
-      }
-
-      let correct = 0;
-      const detailed = questionList.map(({ number, question }) => {
-        const userAnswer = answers[number] ?? "";
-        const isCorrect = userAnswer === question.correct_answer;
-        if (isCorrect) correct += 1;
-        return {
-          question_number: number,
-          question: question.question,
-          correct_answer: question.correct_answer,
-          user_answer: userAnswer,
-          is_correct: isCorrect,
-          explanation: question.explanation
-        };
-      });
-
-      const total = questionList.length;
-      const accuracy = total ? (correct / total) * 100 : 0;
-
-      const payload: ListeningSubmitResult = {
-        score: correct,
-        total,
-        accuracy,
-        results: detailed
-      };
-      setResults(payload);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit exam.");
-    } finally {
-      setIsSubmitting(false);
+    if (questionList.length < TOTAL_QUESTIONS) {
+      const note =
+        `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
+        "Score is based only on generated questions.";
+      setSubmitNote(note);
+      setConfirmPartial(true);
+      return;
     }
+
+    await submitExamNow();
   };
 
   const handlePlay = (questionNumber: number) => {
