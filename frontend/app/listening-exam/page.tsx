@@ -19,7 +19,7 @@ import { explainText } from "@/services/api";
 
 const TOTAL_QUESTIONS = 40;
 const EXAM_DURATION_SECONDS = 60 * 60;
-const PREFETCH_AHEAD = 2;
+const PREFETCH_AHEAD = 5;
 
 export default function ListeningExamPage() {
   const [mode, setMode] = useState<"practice" | "exam">("exam");

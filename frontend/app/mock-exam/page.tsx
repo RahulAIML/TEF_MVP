@@ -17,7 +17,7 @@ import type { ExplainTextResponse } from "@/types/text-helper";
 
 const TOTAL_QUESTIONS = 40;
 const EXAM_DURATION_SECONDS = 60 * 60;
-const PREFETCH_AHEAD = 2;
+const PREFETCH_AHEAD = 5;
 
 export default function MockExamPage() {
   const [isExamStarted, setIsExamStarted] = useState(false);
