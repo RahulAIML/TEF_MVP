@@ -147,6 +147,9 @@ export default function MockExamPage() {
   };
 
   const handleSelectQuestion = async (questionNumber: number) => {
+    if (results || timeUp) {
+      return;
+    }
     setCurrentQuestion(questionNumber);
     if (!questionsRef.current[questionNumber]) {
       try {
