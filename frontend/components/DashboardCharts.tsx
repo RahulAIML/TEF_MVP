@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { Line, Bar, Pie } from "react-chartjs-2";
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler } from "chart.js";
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler, type ScriptableContext } from "chart.js";
 import type { DashboardSummaryResponse } from "@/types/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -32,7 +32,7 @@ export default function DashboardCharts({ summary }: DashboardChartsProps) {
         label: "Accuracy %",
         data: accuracyData,
         borderColor: "#4f46e5",
-        backgroundColor: (ctx: any) => {
+        backgroundColor: (ctx: ScriptableContext<"line">) => {
           const chart = ctx.chart;
           const { ctx: canvasCtx, chartArea } = chart;
           if (!chartArea) return "rgba(79,70,229,0.2)";
