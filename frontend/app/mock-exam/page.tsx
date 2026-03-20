@@ -205,8 +205,48 @@ export default function MockExamPage() {
     void handleSubmitExam();
   };
 
+  const submitExamNow = async () => {
+    if (isSubmitting || results) {
+      return;
+    }
+    if (!startedAt) {
+      setError("Exam has not started.");
+      return;
+    }
+    setIsSubmitting(true);
+    setError("");
+    setSubmitNote("");
+    setTimerActive(false);
+    try {
+      const completedAt = new Date().toISOString();
+      const questionList = Object.values(questionsRef.current)
+        .sort((a, b) => a.question_number - b.question_number)
+        .map((question) => ({
+          question_number: question.question_number,
+          correct_answer: question.correct_answer,
+          question_type: question.question_type,
+          explanation: question.explanation
+        }));
+
+      const response = await submitExam({
+        started_at: startedAt,
+        completed_at: completedAt,
+        answers,
+        questions: questionList
+      });
+      setResults(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to submit exam.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmitExam = async () => {
-    if (confirmPartial) {
+    if (confirmPartial && !forceSubmit) {
+      return;
+    }
+    if (confirmPartial && forceSubmit) {
       setConfirmPartial(false);
     }
 
@@ -237,9 +277,11 @@ export default function MockExamPage() {
           `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
           "Score is based only on generated questions.";
         setSubmitNote(note);
-        setConfirmPartial(true);
-        setIsSubmitting(false);
-        return;
+        if (!forceSubmit) {
+          setConfirmPartial(true);
+          setIsSubmitting(false);
+          return;
+        }
       }
 
       const response = await submitExam({
@@ -367,7 +409,7 @@ export default function MockExamPage() {
               <p className="mt-2 text-sm text-slate-600">{submitNote}</p>
               <div className="mt-4 flex justify-end gap-3">
                 <Button variant="secondary" onClick={() => setConfirmPartial(false)}>Cancel</Button>
-                <Button onClick={handleSubmitExam}>Submit anyway</Button>
+                <Button onClick={() => { setConfirmPartial(false); void submitExamNow(); }}>Submit anyway</Button>
               </div>
             </div>
           </div>
