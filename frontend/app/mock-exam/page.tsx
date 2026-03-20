@@ -243,13 +243,6 @@ export default function MockExamPage() {
   };
 
   const handleSubmitExam = async () => {
-    if (confirmPartial && !forceSubmit) {
-      return;
-    }
-    if (confirmPartial && forceSubmit) {
-      setConfirmPartial(false);
-    }
-
     if (isSubmitting || results) {
       return;
     }
@@ -257,45 +250,26 @@ export default function MockExamPage() {
       setError("Exam has not started.");
       return;
     }
-    setIsSubmitting(true);
-    setError("");
-    setSubmitNote("");
-    setTimerActive(false);
-    try {
-      const completedAt = new Date().toISOString();
-      const questionList = Object.values(questionsRef.current)
-        .sort((a, b) => a.question_number - b.question_number)
-        .map((question) => ({
-          question_number: question.question_number,
-          correct_answer: question.correct_answer,
-          question_type: question.question_type,
-          explanation: question.explanation
-        }));
 
-      if (questionList.length < TOTAL_QUESTIONS) {
-        const note =
-          `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
-          "Score is based only on generated questions.";
-        setSubmitNote(note);
-        if (!forceSubmit) {
-          setConfirmPartial(true);
-          setIsSubmitting(false);
-          return;
-        }
-      }
+    const questionList = Object.values(questionsRef.current)
+      .sort((a, b) => a.question_number - b.question_number)
+      .map((question) => ({
+        question_number: question.question_number,
+        correct_answer: question.correct_answer,
+        question_type: question.question_type,
+        explanation: question.explanation
+      }));
 
-      const response = await submitExam({
-        started_at: startedAt,
-        completed_at: completedAt,
-        answers,
-        questions: questionList
-      });
-      setResults(response);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to submit exam.");
-    } finally {
-      setIsSubmitting(false);
+    if (questionList.length < TOTAL_QUESTIONS) {
+      const note =
+        `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
+        "Score is based only on generated questions.";
+      setSubmitNote(note);
+      setConfirmPartial(true);
+      return;
     }
+
+    await submitExamNow();
   };
 
   const currentQuestionData = questions[currentQuestion];
