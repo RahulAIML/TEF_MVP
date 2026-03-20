@@ -15,9 +15,10 @@ interface DashboardChartsProps {
 const chartContainerClass = "h-64";
 
 export default function DashboardCharts({ summary }: DashboardChartsProps) {
-  const recentLabels = summary.recent_exams.map((exam) => `Exam ${exam.id}`);
-  const accuracyData = summary.recent_exams.map((exam) => exam.accuracy);
-  const scoreData = summary.recent_exams.map((exam) => exam.score);
+  const orderedExams = [...summary.recent_exams].reverse();
+  const recentLabels = orderedExams.map((exam) => `Exam ${exam.id}`);
+  const accuracyData = orderedExams.map((exam) => exam.accuracy);
+  const scoreData = orderedExams.map((exam) => Math.round((exam.accuracy / 100) * 40));
 
   const pieData = useMemo(() => {
     const weakestValue = Math.max(10, Math.round(100 - summary.average_accuracy));
@@ -97,7 +98,7 @@ export default function DashboardCharts({ summary }: DashboardChartsProps) {
 
       <Card className="rounded-2xl shadow-sm">
         <CardHeader>
-          <CardTitle className="text-slate-900">Score History</CardTitle>
+          <CardTitle className="text-slate-900">Score History (normalized to 40)</CardTitle>
         </CardHeader>
         <CardContent className={chartContainerClass}>
           <Bar
@@ -108,7 +109,7 @@ export default function DashboardCharts({ summary }: DashboardChartsProps) {
               plugins: { legend: { display: false } },
               scales: {
                 x: { grid: { display: false } },
-                y: { beginAtZero: true }
+                y: { beginAtZero: true, max: 40, ticks: { stepSize: 10 } }
               }
             }}
           />
