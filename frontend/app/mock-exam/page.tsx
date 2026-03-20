@@ -36,6 +36,7 @@ export default function MockExamPage() {
   const [helperText, setHelperText] = useState("");
   const [helperResult, setHelperResult] = useState<ExplainTextResponse | null>(null);
   const [helperLoading, setHelperLoading] = useState(false);
+  const [confirmPartial, setConfirmPartial] = useState(false);
 
   const questionsRef = useRef<Record<number, ExamQuestion>>({});
   const inFlightRef = useRef<Partial<Record<number, Promise<ExamQuestion>>>>({});
@@ -202,6 +203,10 @@ export default function MockExamPage() {
   };
 
   const handleSubmitExam = async () => {
+    if (confirmPartial) {
+      setConfirmPartial(false);
+    }
+
     if (isSubmitting || results) {
       return;
     }
@@ -229,10 +234,9 @@ export default function MockExamPage() {
           `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
           "Score is based only on generated questions.";
         setSubmitNote(note);
-        if (typeof window !== "undefined") {
-          window.alert(note);
-        }
-
+        setConfirmPartial(true);
+        setIsSubmitting(false);
+        return;
       }
 
       const response = await submitExam({
@@ -353,7 +357,20 @@ export default function MockExamPage() {
           </div>
         )}
 
-        {results && (
+        {confirmPartial && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900">Partial submission confirmation</h3>
+              <p className="mt-2 text-sm text-slate-600">{submitNote}</p>
+              <div className="mt-4 flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setConfirmPartial(false)}>Cancel</Button>
+                <Button onClick={handleSubmitExam}>Submit anyway</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+{results && (
           <div className="space-y-4">
             <div className="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
               Exam submitted successfully.

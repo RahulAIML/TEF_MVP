@@ -39,6 +39,7 @@ export default function ListeningExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [results, setResults] = useState<ListeningSubmitResult | null>(null);
   const [timeUp, setTimeUp] = useState(false);
+  const [confirmPartial, setConfirmPartial] = useState(false);
 
   const [practiceQuestion, setPracticeQuestion] = useState<ListeningQuestion | null>(null);
   const [practiceAnswer, setPracticeAnswer] = useState<AnswerOption | "">("");
@@ -178,6 +179,10 @@ export default function ListeningExamPage() {
   };
 
   const handleSubmitExam = async () => {
+    if (confirmPartial) {
+      setConfirmPartial(false);
+    }
+
     if (isSubmitting || results) return;
     if (!startedAt) {
       setError("Exam has not started.");
@@ -198,9 +203,9 @@ export default function ListeningExamPage() {
           `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
           "Score is based only on generated questions.";
         setSubmitNote(note);
-        if (typeof window !== "undefined") {
-          window.alert(note);
-        }
+        setConfirmPartial(true);
+        setIsSubmitting(false);
+        return;
       }
 
       let correct = 0;
@@ -489,7 +494,20 @@ export default function ListeningExamPage() {
           </div>
         )}
 
-        {results && (
+        {confirmPartial && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-sm">
+              <h3 className="text-lg font-semibold text-slate-900">Partial submission confirmation</h3>
+              <p className="mt-2 text-sm text-slate-600">{submitNote}</p>
+              <div className="mt-4 flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setConfirmPartial(false)}>Cancel</Button>
+                <Button onClick={handleSubmitExam}>Submit anyway</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+{results && (
           <ListeningResults
             score={results.score}
             total={results.total}

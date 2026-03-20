@@ -492,7 +492,7 @@ explanation
 
 Rules:
 - Language: French only.
-- Script length: 20 to 40 seconds when spoken (roughly 90 to 140 words).
+- Script length: 10 to 30 seconds when spoken (roughly 45 to 100 words).
 - Style: natural spoken French; can be an announcement, interview, news brief, or dialogue.
 - Topic: {domain}; set in {place} involving {context}.
 - Include one clear MCQ question based on the script.
@@ -509,9 +509,9 @@ Rules:
 """
 
   last_error: Exception | None = None
-  for _ in range(6):
+  for _ in range(4):
     try:
-      payload = _generate_json(prompt, temperature=0.95)
+      payload = _generate_json(prompt, temperature=0.7)
       normalized = _normalize_listening_question(payload)
       fingerprint = _listening_fingerprint(
         normalized["script"],
