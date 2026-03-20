@@ -41,6 +41,8 @@ export default function ListeningQuestionCard({
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(false);
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
   const audioSrc = useMemo(() => {
@@ -63,18 +65,26 @@ export default function ListeningQuestionCard({
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handlePlay = () => setIsPlaying(true);
+    const handlePlay = () => {
+      setIsPlaying(true);
+      setAutoScroll(true);
+      setIsBuffering(false);
+    };
     const handlePause = () => setIsPlaying(false);
     const handleEnded = () => setIsPlaying(false);
+
+    const handleCanPlay = () => setIsBuffering(false);
 
     audio.addEventListener("play", handlePlay);
     audio.addEventListener("pause", handlePause);
     audio.addEventListener("ended", handleEnded);
+    audio.addEventListener("canplaythrough", handleCanPlay);
 
     return () => {
       audio.removeEventListener("play", handlePlay);
       audio.removeEventListener("pause", handlePause);
       audio.removeEventListener("ended", handleEnded);
+      audio.removeEventListener("canplaythrough", handleCanPlay);
     };
   }, []);
 
@@ -94,20 +104,23 @@ export default function ListeningQuestionCard({
   }, [isPlaying, showTranscript, words.length]);
 
   useEffect(() => {
-    if (!showTranscript) return;
+    if (!showTranscript || !autoScroll) return;
     const currentWord = wordRefs.current[currentWordIndex];
     if (currentWord && transcriptRef.current) {
       currentWord.scrollIntoView({ block: "center", behavior: "smooth" });
     }
-  }, [currentWordIndex, showTranscript]);
+  }, [currentWordIndex, showTranscript, autoScroll]);
 
   const handlePlayClick = async () => {
     if (!audioRef.current || !canPlay) return;
+    if (audioRef.current.readyState < 3) {
+      setIsBuffering(true);
+    }
     try {
       await audioRef.current.play();
       onPlay?.();
     } catch {
-      // ignore play errors
+      setIsBuffering(false);
     }
   };
 
@@ -150,7 +163,7 @@ export default function ListeningQuestionCard({
           <p className="text-sm font-medium text-slate-700">Audio Controls</p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button onClick={handlePlayClick} disabled={!canPlay}>
-              {remainingPlays === null ? "Play" : remainingPlays > 0 ? `Play (${remainingPlays} left)` : "Play limit reached"}
+              {isBuffering ? "Loading audio..." : remainingPlays === null ? "Play" : remainingPlays > 0 ? `Play (${remainingPlays} left)` : "Play limit reached"}
             </Button>
             <Button variant="secondary" onClick={handlePauseClick} disabled={!audioSrc}>
               Pause
@@ -182,8 +195,10 @@ export default function ListeningQuestionCard({
             <p className="text-sm font-medium text-slate-700">Transcript</p>
             <div
               ref={transcriptRef}
-              className="mt-3 max-h-48 overflow-y-auto rounded-xl bg-white p-3 text-sm leading-6 text-slate-700"
+              className="mt-3 max-h-48 overflow-y-auto rounded-xl bg-white p-3 text-sm leading-6 text-slate-700 scrollbar-thin"
               onMouseUp={handleTranscriptSelection}
+              onWheel={(e) => { setAutoScroll(false); e.stopPropagation(); }}
+              onTouchMove={() => setAutoScroll(false)}
             >
               {words.map((word, index) => (
                 <span
