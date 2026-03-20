@@ -347,15 +347,15 @@ export default function ListeningExamPage() {
                       Practice one question at a time. Transcript is enabled by default and explanations
                       appear as soon as you answer.
                     </p>
-                    <Button className="mt-4" onClick={loadPracticeQuestion}>
-                      Start Practice
+                    <Button className="mt-4" onClick={loadPracticeQuestion} disabled={loadingQuestion}>
+                      {loadingQuestion ? "Preparing audio..." : "Start Practice"}
                     </Button>
                   </CardContent>
                 </Card>
               ) : (
                 <div className="space-y-4">
                   {loadingQuestion && (
-                    <p className="text-sm text-slate-500">Loading practice question...</p>
+                    <p className="text-sm text-slate-500">Preparing practice audio...</p>
                   )}
                   <ListeningQuestionCard
                     question={practiceQuestion}

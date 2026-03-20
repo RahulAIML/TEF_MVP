@@ -198,6 +198,8 @@ export default function ListeningQuestionCard({
               className="mt-3 max-h-48 overflow-y-auto rounded-xl bg-white p-3 text-sm leading-6 text-slate-700 scrollbar-thin"
               onMouseUp={handleTranscriptSelection}
               onWheel={() => setAutoScroll(false)}
+              onScroll={() => setAutoScroll(false)}
+              onPointerDown={() => setAutoScroll(false)}
               onTouchMove={() => setAutoScroll(false)}
             >
               {words.map((word, index) => (
