@@ -44,6 +44,7 @@ export default function ListeningExamPage() {
   const [practiceQuestion, setPracticeQuestion] = useState<ListeningQuestion | null>(null);
   const [practiceAnswer, setPracticeAnswer] = useState<AnswerOption | "">("");
   const [practiceCount, setPracticeCount] = useState(1);
+  const [practicePlayCount, setPracticePlayCount] = useState(0);
 
   const [helperText, setHelperText] = useState("");
   const [helperResult, setHelperResult] = useState<ExplainTextResponse | null>(null);
@@ -276,12 +277,17 @@ export default function ListeningExamPage() {
       });
       setPracticeQuestion(question);
       setPracticeAnswer("");
+      setPracticePlayCount(0);
       setPracticeCount((prev) => prev + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load practice question.");
     } finally {
       setLoadingQuestion(false);
     }
+  };
+
+  const handlePracticePlay = () => {
+    setPracticePlayCount((prev) => (prev >= 2 ? prev : prev + 1));
   };
 
   const handlePracticeAnswer = (value: AnswerOption) => {
@@ -356,6 +362,9 @@ export default function ListeningExamPage() {
                     questionNumber={practiceCount - 1}
                     selectedAnswer={practiceAnswer}
                     onSelect={handlePracticeAnswer}
+                    maxPlays={2}
+                    playCount={practicePlayCount}
+                    onPlay={handlePracticePlay}
                     showTranscript={showTranscript}
                     onToggleTranscript={() => setShowTranscript((prev) => !prev)}
                     onTranscriptSelect={handleTranscriptSelection}
