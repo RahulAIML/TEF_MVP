@@ -135,7 +135,7 @@ export default function ListeningExamPage() {
     const request = generateListeningAudio({
       script: existing.script,
       question_number: questionNumber,
-      session_id: sessionId
+      session_id: sessionId ?? undefined
     })
       .then((response) => {
         const updatedQuestion: ListeningQuestion = { ...existing, audio_url: response.audio_url };
@@ -322,7 +322,7 @@ export default function ListeningExamPage() {
     try {
       const question = await generateListeningQuestion({
         question_number: practiceCount,
-        session_id: sessionId,
+        session_id: sessionId ?? undefined,
         defer_audio: true
       });
       setPracticeQuestion(question);
@@ -593,6 +593,7 @@ export default function ListeningExamPage() {
     </AppShell>
   );
 }
+
 
 
 
