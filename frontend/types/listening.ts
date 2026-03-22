@@ -3,6 +3,17 @@ import type { AnswerOption } from "@/types/exam";
 export interface GenerateListeningQuestionRequest {
   question_number: number;
   session_id?: string;
+  defer_audio?: boolean;
+}
+
+export interface GenerateListeningAudioRequest {
+  script: string;
+  question_number: number;
+  session_id?: string;
+}
+
+export interface GenerateListeningAudioResponse {
+  audio_url: string;
 }
 
 export interface ListeningQuestion {

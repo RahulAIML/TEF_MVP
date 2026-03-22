@@ -19,7 +19,7 @@ import { explainText } from "@/services/api";
 
 const TOTAL_QUESTIONS = 40;
 const EXAM_DURATION_SECONDS = 60 * 60;
-const PREFETCH_AHEAD = 5;
+const PREFETCH_AHEAD = 1;
 
 export default function ListeningExamPage() {
   const [mode, setMode] = useState<"practice" | "exam">("exam");
@@ -251,6 +251,18 @@ export default function ListeningExamPage() {
     }
 
     await submitExamNow();
+  };
+
+  const requestListeningAudio = async (question: ListeningQuestion, questionNumber: number, sessionId: string | null, setQuestion: (q: ListeningQuestion) => void) => {
+    if (question.audio_url) return question.audio_url;
+    const response = await generateListeningAudio({
+      script: question.script,
+      question_number: questionNumber,
+      session_id: sessionId ?? undefined
+    });
+    const updated = { ...question, audio_url: response.audio_url };
+    setQuestion(updated);
+    return response.audio_url;
   };
 
   const handlePlay = (questionNumber: number) => {

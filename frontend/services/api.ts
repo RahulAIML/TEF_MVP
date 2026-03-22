@@ -60,6 +60,19 @@ export async function generateListeningQuestion(
   return parseResponse<ListeningQuestion>(res);
 }
 
+
+export async function generateListeningAudio(
+  payload: GenerateListeningAudioRequest
+): Promise<GenerateListeningAudioResponse> {
+  const res = await fetch(`${API_BASE_URL}/generate-listening-audio`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<GenerateListeningAudioResponse>(res);
+}
+
 export async function generateQuestion(
   payload: GenerateQuestionRequest
 ): Promise<ExamQuestion> {

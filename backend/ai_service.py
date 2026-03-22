@@ -526,7 +526,7 @@ Rules:
   raise RuntimeError(f"Gemini response validation failed after retries: {last_error}") from last_error
 
 
-def generate_listening_question(question_number: int, session_id: str | None = None) -> ListeningQuestionResponse:
+def generate_listening_question(question_number: int, session_id: str | None = None, defer_audio: bool = False) -> ListeningQuestionResponse:
   domain = _pick_domain()
   freshness_token = _freshness_token()
   place, context = _scenario_from_seed(freshness_token)
@@ -575,7 +575,9 @@ Rules:
       if fingerprint in cache or fingerprint in cache_all or script_fingerprint in script_cache_all:
         last_error = RuntimeError("Duplicate listening question generated; retrying.")
         continue
-      audio_url = _generate_tts_audio(normalized["script"], question_number, session_id)
+      audio_url = None
+      if not defer_audio:
+        audio_url = _generate_tts_audio(normalized["script"], question_number, session_id)
       cache.append(fingerprint)
       cache_all.append(fingerprint)
       script_cache_all.append(script_fingerprint)
@@ -592,6 +594,10 @@ Rules:
     f"Gemini response validation failed for listening question after retries: {last_error}"
   ) from last_error
 
+
+
+def generate_listening_audio(script: str, question_number: int, session_id: str | None = None) -> str:
+  return _generate_tts_audio(script, question_number, session_id)
 
 def generate_passage() -> PassageResponse:
   last_error: Exception | None = None

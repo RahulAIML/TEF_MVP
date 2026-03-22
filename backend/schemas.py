@@ -131,6 +131,7 @@ class WordMeaningResponse(BaseModel):
 class GenerateListeningQuestionRequest(BaseModel):
   question_number: int = Field(ge=1, le=40)
   session_id: str | None = None
+  defer_audio: bool = False
 
 
 class ListeningQuestionResponse(BaseModel):
@@ -193,3 +194,13 @@ class DashboardSummaryResponse(BaseModel):
   average_accuracy: float
   recent_exams: List[RecentExam]
   weakest_question_type: str
+
+
+class GenerateListeningAudioRequest(BaseModel):
+  script: str = Field(min_length=1)
+  question_number: int = Field(ge=1, le=40)
+  session_id: str | None = None
+
+
+class GenerateListeningAudioResponse(BaseModel):
+  audio_url: str

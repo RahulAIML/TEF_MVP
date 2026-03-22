@@ -15,6 +15,7 @@ interface ListeningQuestionCardProps {
   maxPlays?: number;
   playCount?: number;
   onPlay?: () => void;
+  onRequestAudio?: (question: ListeningQuestion) => Promise<string | undefined>;
   showTranscript: boolean;
   onToggleTranscript?: () => void;
   onTranscriptSelect?: (text: string) => void;
@@ -31,6 +32,7 @@ export default function ListeningQuestionCard({
   maxPlays,
   playCount = 0,
   onPlay,
+  onRequestAudio,
   showTranscript,
   onToggleTranscript,
   onTranscriptSelect
@@ -113,6 +115,15 @@ export default function ListeningQuestionCard({
 
   const handlePlayClick = async () => {
     if (!audioRef.current || !canPlay) return;
+    if (!audioSrc && onRequestAudio) {
+      setIsBuffering(true);
+      try {
+        await onRequestAudio(question);
+      } catch {
+        setIsBuffering(false);
+        return;
+      }
+    }
     if (audioRef.current.readyState < 3) {
       setIsBuffering(true);
     }
