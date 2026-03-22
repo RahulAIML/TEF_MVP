@@ -253,18 +253,6 @@ export default function ListeningExamPage() {
     await submitExamNow();
   };
 
-  const requestListeningAudio = async (question: ListeningQuestion, questionNumber: number, sessionId: string | null, setQuestion: (q: ListeningQuestion) => void) => {
-    if (question.audio_url) return question.audio_url;
-    const response = await generateListeningAudio({
-      script: question.script,
-      question_number: questionNumber,
-      session_id: sessionId ?? undefined
-    });
-    const updated = { ...question, audio_url: response.audio_url };
-    setQuestion(updated);
-    return response.audio_url;
-  };
-
   const handlePlay = (questionNumber: number) => {
     setPlayCounts((prev) => {
       const current = prev[questionNumber] ?? 0;
