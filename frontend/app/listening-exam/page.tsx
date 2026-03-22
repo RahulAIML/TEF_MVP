@@ -123,7 +123,7 @@ export default function ListeningExamPage() {
     }
   };
 
-  const ensureListeningAudio = async (questionNumber: number, sessionId?: string): Promise<string | undefined> => {
+  const ensureListeningAudio = async (questionNumber: number, sessionId?: string | null): Promise<string | undefined> => {
     const existing = questionsRef.current[questionNumber];
     if (!existing || existing.audio_url) {
       return existing?.audio_url ?? undefined;
@@ -593,6 +593,7 @@ export default function ListeningExamPage() {
     </AppShell>
   );
 }
+
 
 
 
