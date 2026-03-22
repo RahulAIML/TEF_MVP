@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 import requests
+import io
+import wave
 from collections import deque
 import hashlib
 import os
@@ -11,6 +13,8 @@ import uuid
 from typing import Any, Dict, Tuple
 
 import google.generativeai as genai
+from google import genai as genai_client
+from google.genai import types
 from dotenv import load_dotenv
 from pydantic import ValidationError
 
@@ -22,6 +26,7 @@ MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
+GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 AUDIO_STORAGE_PATH = os.getenv("AUDIO_STORAGE_PATH", os.path.join(os.path.dirname(__file__), "data", "audio"))
 
 DOMAINS = [
@@ -362,12 +367,57 @@ def _generate_tts_audio(script: str, question_number: int, session_id: str | Non
     response = requests.post(url, headers=headers, json=payload, timeout=45)
     response.raise_for_status()
   except requests.RequestException as error:
-    raise RuntimeError(f"ElevenLabs TTS failed: {error}") from error
+    # fallback to Gemini TTS when ElevenLabs fails
+    return _generate_gemini_tts_audio(script, question_number, session_id)
 
   file_name = f"listening_q{question_number}_{session_id or 'global'}_{uuid.uuid4().hex[:8]}.mp3"
   file_path = os.path.join(AUDIO_STORAGE_PATH, file_name)
   with open(file_path, "wb") as audio_file:
     audio_file.write(response.content)
+
+  return f"/audio/{file_name}"
+
+
+def _generate_gemini_tts_audio(script: str, question_number: int, session_id: str | None) -> str:
+  _ensure_api_key()
+  os.makedirs(AUDIO_STORAGE_PATH, exist_ok=True)
+  client = genai_client.Client(api_key=API_KEY)
+  try:
+    response = client.models.generate_content(
+      model=GEMINI_TTS_MODEL,
+      contents=script,
+      config=types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(
+          voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+              voice_name="Kore"
+            )
+          )
+        )
+      )
+    )
+  except Exception as error:
+    raise RuntimeError(f"Gemini TTS failed with model '{GEMINI_TTS_MODEL}': {error}") from error
+
+  try:
+    inline_data = response.candidates[0].content.parts[0].inline_data
+    audio_bytes = inline_data.data
+  except Exception as error:
+    raise RuntimeError("Gemini TTS returned no audio data.") from error
+
+  buffer = io.BytesIO()
+  with wave.open(buffer, "wb") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(24000)
+    wf.writeframes(audio_bytes)
+  wav_bytes = buffer.getvalue()
+
+  file_name = f"listening_q{question_number}_{session_id or 'global'}_{uuid.uuid4().hex[:8]}.wav"
+  file_path = os.path.join(AUDIO_STORAGE_PATH, file_name)
+  with open(file_path, "wb") as audio_file:
+    audio_file.write(wav_bytes)
 
   return f"/audio/{file_name}"
 
