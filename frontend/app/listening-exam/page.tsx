@@ -52,6 +52,7 @@ export default function ListeningExamPage() {
 
   const questionsRef = useRef<Record<number, ListeningQuestion>>({});
   const inFlightRef = useRef<Partial<Record<number, Promise<ListeningQuestion>>>>({});
+  const audioInFlightRef = useRef<Partial<Record<number, Promise<string>>>>({});
   const examSessionIdRef = useRef<string | null>(null);
   const practiceSessionIdRef = useRef<string | null>(null);
 
