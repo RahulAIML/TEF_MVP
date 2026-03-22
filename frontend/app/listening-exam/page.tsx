@@ -52,7 +52,7 @@ export default function ListeningExamPage() {
 
   const questionsRef = useRef<Record<number, ListeningQuestion>>({});
   const inFlightRef = useRef<Partial<Record<number, Promise<ListeningQuestion>>>>({});
-  const audioInFlightRef = useRef<Partial<Record<number, Promise<string>>>>({});
+  const audioInFlightRef = useRef<Partial<Record<number, Promise<string | undefined>>>>({});
   const examSessionIdRef = useRef<string | null>(null);
   const practiceSessionIdRef = useRef<string | null>(null);
 
@@ -123,7 +123,7 @@ export default function ListeningExamPage() {
     }
   };
 
-  const ensureListeningAudio = async (questionNumber: number, sessionId?: string) => {
+  const ensureListeningAudio = async (questionNumber: number, sessionId?: string): Promise<string | undefined> => {
     const existing = questionsRef.current[questionNumber];
     if (!existing || existing.audio_url) {
       return existing?.audio_url;
