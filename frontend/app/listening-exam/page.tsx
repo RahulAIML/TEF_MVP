@@ -415,6 +415,7 @@ export default function ListeningExamPage() {
                     maxPlays={2}
                     playCount={practicePlayCount}
                     onPlay={handlePracticePlay}
+                    onRequestAudio={(question) => requestPracticeAudio(question, practiceCount - 1)}
                     showTranscript={showTranscript}
                     onToggleTranscript={() => setShowTranscript((prev) => !prev)}
                     onTranscriptSelect={handleTranscriptSelection}
@@ -515,6 +516,7 @@ export default function ListeningExamPage() {
                       maxPlays={2}
                       playCount={currentPlays}
                       onPlay={() => handlePlay(currentQuestion)}
+                      onRequestAudio={(question) => requestExamAudio(question, currentQuestion)}
                       showTranscript={showTranscript}
                       onToggleTranscript={() => setShowTranscript((prev) => !prev)}
                       onTranscriptSelect={handleTranscriptSelection}
@@ -590,6 +592,7 @@ export default function ListeningExamPage() {
     </AppShell>
   );
 }
+
 
 
 
