@@ -7,7 +7,7 @@ import type {
 } from "@/types/exam";
 import type { DashboardSummaryResponse } from "@/types/dashboard";
 import type { PassageQuizResponse, PassageResponse } from "@/types/passage";
-import type { GenerateListeningQuestionRequest, ListeningQuestion } from "@/types/listening";
+import type { GenerateListeningQuestionRequest, ListeningQuestion, GenerateListeningAudioRequest, GenerateListeningAudioResponse } from "@/types/listening";
 import type { ExplainTextRequest, ExplainTextResponse } from "@/types/text-helper";
 import type { AuthResponse, LoginRequest, SignupRequest } from "@/types/user";
 import { getAuthToken } from "@/lib/auth";
