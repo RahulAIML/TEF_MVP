@@ -136,7 +136,7 @@ class GenerateListeningQuestionRequest(BaseModel):
 
 class ListeningQuestionResponse(BaseModel):
   script: str
-  audio_url: str
+  audio_url: str | None = None
   question: str
   options: List[str] = Field(default_factory=list)
   correct_answer: AnswerOption
@@ -203,4 +203,5 @@ class GenerateListeningAudioRequest(BaseModel):
 
 
 class GenerateListeningAudioResponse(BaseModel):
-  audio_url: str
+  audio_url: str | None = None
+

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import requests
 import io
 import wave
@@ -21,6 +22,8 @@ from pydantic import ValidationError
 from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMeaningResponse, ListeningQuestionResponse
 
 load_dotenv()
+
+logger = logging.getLogger('tef.tts')
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -360,20 +363,38 @@ def _generate_tts_audio(script: str, question_number: int, session_id: str | Non
   _ensure_elevenlabs_config()
   os.makedirs(AUDIO_STORAGE_PATH, exist_ok=True)
   url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
-  payload = {"text": script, "model_id": "eleven_multilingual_v2"}
+  payload = {
+    "text": script,
+    "model_id": "eleven_multilingual_v2",
+    "optimize_streaming_latency": 2
+  }
   headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
 
+  logger.info(
+    "ElevenLabs TTS request: question=%s session=%s chars=%s",
+    question_number,
+    session_id or "global",
+    len(script)
+  )
+
   try:
-    response = requests.post(url, headers=headers, json=payload, timeout=45)
+    response = requests.post(url, headers=headers, json=payload, timeout=30)
     response.raise_for_status()
   except requests.RequestException as error:
-    # fallback to Gemini TTS when ElevenLabs fails
+    logger.warning("ElevenLabs TTS failed: %s. Falling back to Gemini TTS.", error)
     return _generate_gemini_tts_audio(script, question_number, session_id)
 
   file_name = f"listening_q{question_number}_{session_id or 'global'}_{uuid.uuid4().hex[:8]}.mp3"
   file_path = os.path.join(AUDIO_STORAGE_PATH, file_name)
   with open(file_path, "wb") as audio_file:
     audio_file.write(response.content)
+
+  logger.info(
+    "ElevenLabs TTS success: status=%s bytes=%s file=%s",
+    response.status_code,
+    len(response.content),
+    file_name
+  )
 
   return f"/audio/{file_name}"
 
@@ -398,12 +419,14 @@ def _generate_gemini_tts_audio(script: str, question_number: int, session_id: st
       )
     )
   except Exception as error:
+    logger.error("Gemini TTS request failed: %s", error)
     raise RuntimeError(f"Gemini TTS failed with model '{GEMINI_TTS_MODEL}': {error}") from error
 
   try:
     inline_data = response.candidates[0].content.parts[0].inline_data
     audio_bytes = inline_data.data
   except Exception as error:
+    logger.error("Gemini TTS returned no audio data: %s", error)
     raise RuntimeError("Gemini TTS returned no audio data.") from error
 
   buffer = io.BytesIO()
@@ -419,7 +442,10 @@ def _generate_gemini_tts_audio(script: str, question_number: int, session_id: st
   with open(file_path, "wb") as audio_file:
     audio_file.write(wav_bytes)
 
+  logger.info("Gemini TTS success: bytes=%s file=%s", len(wav_bytes), file_name)
+
   return f"/audio/{file_name}"
+
 
 def _pick_domain() -> str:
   global _last_domain
@@ -542,7 +568,7 @@ explanation
 
 Rules:
 - Language: French only.
-- Script length: 10 to 30 seconds when spoken (roughly 45 to 100 words).
+- Script length: 8 to 20 seconds when spoken (roughly 35 to 70 words).
 - Style: natural spoken French; can be an announcement, interview, news brief, or dialogue.
 - Topic: {domain}; set in {place} involving {context}.
 - Include one clear MCQ question based on the script.
@@ -559,7 +585,7 @@ Rules:
 """
 
   last_error: Exception | None = None
-  for _ in range(4):
+  for _ in range(3):
     try:
       payload = _generate_json(prompt, temperature=0.7)
       normalized = _normalize_listening_question(payload)
@@ -601,7 +627,7 @@ def generate_listening_audio(script: str, question_number: int, session_id: str 
 
 def generate_passage() -> PassageResponse:
   last_error: Exception | None = None
-  for _ in range(4):
+  for _ in range(3):
     domain = _pick_domain()
     freshness_token = _freshness_token()
     place, context = _scenario_from_seed(freshness_token)
@@ -786,3 +812,14 @@ Rules:
     raise RuntimeError(
       f"Gemini response validation failed for dictionary lookup: {validation_error}"
     ) from validation_error
+
+
+
+
+
+
+
+
+
+
+

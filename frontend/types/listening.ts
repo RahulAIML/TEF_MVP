@@ -13,12 +13,12 @@ export interface GenerateListeningAudioRequest {
 }
 
 export interface GenerateListeningAudioResponse {
-  audio_url: string;
+  audio_url?: string | null;
 }
 
 export interface ListeningQuestion {
   script: string;
-  audio_url: string;
+  audio_url?: string | null;
   question: string;
   options: string[];
   correct_answer: AnswerOption;
@@ -40,3 +40,4 @@ export interface ListeningSubmitResult {
   accuracy: number;
   results: ListeningResultItem[];
 }
+

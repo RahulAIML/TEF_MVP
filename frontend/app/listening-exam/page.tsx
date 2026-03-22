@@ -11,7 +11,7 @@ import TextExplanationCard from "@/components/TextExplanationCard";
 import TimerClock from "@/components/TimerClock";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { generateListeningQuestion } from "@/services/api";
+import { generateListeningQuestion, generateListeningAudio } from "@/services/api";
 import type { AnswerOption } from "@/types/exam";
 import type { ExplainTextResponse } from "@/types/text-helper";
 import type { ListeningQuestion, ListeningSubmitResult } from "@/types/listening";
@@ -105,7 +105,8 @@ export default function ListeningExamPage() {
     try {
       const request = generateListeningQuestion({
         question_number: questionNumber,
-        session_id: examSessionIdRef.current ?? undefined
+        session_id: examSessionIdRef.current ?? undefined,
+        defer_audio: true
       }).then((question) => {
         const updated = { ...questionsRef.current, [questionNumber]: question };
         questionsRef.current = updated;
@@ -121,6 +122,33 @@ export default function ListeningExamPage() {
     }
   };
 
+  const ensureListeningAudio = async (questionNumber: number, sessionId?: string) => {
+    const existing = questionsRef.current[questionNumber];
+    if (!existing || existing.audio_url) {
+      return existing?.audio_url;
+    }
+    const inFlight = audioInFlightRef.current[questionNumber];
+    if (inFlight) {
+      return inFlight;
+    }
+    const request = generateListeningAudio({
+      script: existing.script,
+      question_number: questionNumber,
+      session_id: sessionId
+    })
+      .then((response) => {
+        const updatedQuestion: ListeningQuestion = { ...existing, audio_url: response.audio_url };
+        const updated = { ...questionsRef.current, [questionNumber]: updatedQuestion };
+        questionsRef.current = updated;
+        setQuestions(updated);
+        return response.audio_url;
+      })
+      .finally(() => {
+        delete audioInFlightRef.current[questionNumber];
+      });
+    audioInFlightRef.current[questionNumber] = request;
+    return request;
+  };
   const prefetchQuestions = (fromQuestion: number) => {
     if (!isExamStarted || timeUp || results) return;
     for (let offset = 1; offset <= PREFETCH_AHEAD; offset += 1) {
@@ -128,10 +156,16 @@ export default function ListeningExamPage() {
       if (questionNumber > TOTAL_QUESTIONS) break;
       if (questionsRef.current[questionNumber]) continue;
       if (inFlightRef.current[questionNumber]) continue;
-      void ensureQuestion(questionNumber, false).catch(() => undefined);
+      void ensureQuestion(questionNumber, false)
+        .then(() => ensureListeningAudio(questionNumber, examSessionIdRef.current).catch(() => undefined))
+        .catch(() => undefined);
     }
   };
 
+  const requestExamAudio = async (question: ListeningQuestion, questionNumber: number) => {
+    if (question.audio_url) return question.audio_url;
+    return ensureListeningAudio(questionNumber, examSessionIdRef.current);
+  };
   const handleStartExam = async () => {
     if (isExamStarted) return;
     setIsExamStarted(true);
@@ -144,6 +178,7 @@ export default function ListeningExamPage() {
     setSubmitNote("");
     try {
       await ensureQuestion(1);
+      void ensureListeningAudio(1, examSessionIdRef.current).catch(() => undefined);
       prefetchQuestions(1);
       setStartedAt(new Date().toISOString());
       setTimerKey((prev) => prev + 1);
@@ -162,6 +197,7 @@ export default function ListeningExamPage() {
     if (!questionsRef.current[questionNumber]) {
       try {
         await ensureQuestion(questionNumber);
+        void ensureListeningAudio(questionNumber, examSessionIdRef.current).catch(() => undefined);
         prefetchQuestions(questionNumber);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load question.");
@@ -169,6 +205,7 @@ export default function ListeningExamPage() {
       return;
     }
     prefetchQuestions(questionNumber);
+    void ensureListeningAudio(questionNumber, examSessionIdRef.current).catch(() => undefined);
   };
 
   const handleAnswerSelect = (value: AnswerOption) => {
@@ -261,6 +298,17 @@ export default function ListeningExamPage() {
     });
   };
 
+  const requestPracticeAudio = async (question: ListeningQuestion, questionNumber: number) => {
+    if (question.audio_url) return question.audio_url;
+    const response = await generateListeningAudio({
+      script: question.script,
+      question_number: questionNumber,
+      session_id: practiceSessionIdRef.current ?? undefined
+    });
+    const updatedQuestion: ListeningQuestion = { ...question, audio_url: response.audio_url };
+    setPracticeQuestion(updatedQuestion);
+    return response.audio_url;
+  };
   const loadPracticeQuestion = async () => {
     const sessionId = practiceSessionIdRef.current
       ?? (typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -273,12 +321,14 @@ export default function ListeningExamPage() {
     try {
       const question = await generateListeningQuestion({
         question_number: practiceCount,
-        session_id: sessionId
+        session_id: sessionId,
+        defer_audio: true
       });
       setPracticeQuestion(question);
       setPracticeAnswer("");
       setPracticePlayCount(0);
       setPracticeCount((prev) => prev + 1);
+      void requestPracticeAudio(question, practiceCount).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load practice question.");
     } finally {
@@ -540,3 +590,22 @@ export default function ListeningExamPage() {
     </AppShell>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

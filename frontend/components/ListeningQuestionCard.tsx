@@ -47,21 +47,36 @@ export default function ListeningQuestionCard({
   const [isBuffering, setIsBuffering] = useState(false);
 
   const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-  const audioSrc = useMemo(() => {
-    if (!question.audio_url) return "";
-    if (question.audio_url.startsWith("http")) return question.audio_url;
-    return `${apiBase}${question.audio_url}`;
+  const [localAudioUrl, setLocalAudioUrl] = useState("");
+
+  useEffect(() => {
+    const url = question.audio_url ?? "";
+    if (!url) {
+      setLocalAudioUrl("");
+      return;
+    }
+    setLocalAudioUrl(url.startsWith("http") ? url : `${apiBase}${url}`);
   }, [question.audio_url, apiBase]);
+
+  const audioSrc = localAudioUrl;
 
   const words = useMemo(() => question.script.split(/\s+/).filter(Boolean), [question.script]);
 
   const remainingPlays = maxPlays ? Math.max(0, maxPlays - playCount) : null;
-  const canPlay = Boolean(audioSrc) && (remainingPlays === null || remainingPlays > 0);
+  const canPlay = (Boolean(audioSrc) || Boolean(onRequestAudio)) && (remainingPlays === null || remainingPlays > 0);
 
   useEffect(() => {
     if (!audioRef.current) return;
     audioRef.current.playbackRate = playbackRate;
   }, [playbackRate]);
+
+  useEffect(() => {
+    if (disabled && audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+    }
+  }, [disabled]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -109,43 +124,80 @@ export default function ListeningQuestionCard({
     if (!showTranscript || !autoScroll) return;
     const currentWord = wordRefs.current[currentWordIndex];
     if (currentWord && transcriptRef.current) {
-      currentWord.scrollIntoView({ block: "center", behavior: "smooth" });
+      currentWord.scrollIntoView({ block: "center", behavior: "auto" });
     }
   }, [currentWordIndex, showTranscript, autoScroll]);
 
   const handlePlayClick = async () => {
     if (!audioRef.current || !canPlay) return;
+    const audio = audioRef.current;
+
     if (!audioSrc && onRequestAudio) {
       setIsBuffering(true);
       try {
-        await onRequestAudio(question);
+        const url = await onRequestAudio(question);
+        if (url) {
+          const resolved = url.startsWith("http") ? url : `${apiBase}${url}`;
+          setLocalAudioUrl(resolved);
+          audio.src = resolved;
+          audio.load();
+        }
       } catch {
         setIsBuffering(false);
         return;
       }
     }
-    if (audioRef.current.readyState < 3) {
+
+    if (audio.readyState < 3) {
       setIsBuffering(true);
+      await new Promise<void>((resolve, reject) => {
+        const handleReady = () => {
+          audio.removeEventListener("canplaythrough", handleReady);
+          audio.removeEventListener("error", handleError);
+          resolve();
+        };
+        const handleError = () => {
+          audio.removeEventListener("canplaythrough", handleReady);
+          audio.removeEventListener("error", handleError);
+          reject();
+        };
+        audio.addEventListener("canplaythrough", handleReady);
+        audio.addEventListener("error", handleError);
+        audio.load();
+      }).catch(() => undefined);
     }
+
     try {
-      await audioRef.current.play();
+      await audio.play();
       onPlay?.();
     } catch {
       setIsBuffering(false);
     }
   };
-
-  const handlePauseClick = () => {
-    audioRef.current?.pause();
+  const handlePauseClick = async () => {
+    if (!audioRef.current) return;
+    const audio = audioRef.current;
+    if (isPlaying) {
+      audio.pause();
+      return;
+    }
+    if (audio.readyState < 3) {
+      setIsBuffering(true);
+      audio.load();
+    }
+    try {
+      await audio.play();
+    } catch {
+      setIsBuffering(false);
+    }
   };
-
   const handleStopClick = () => {
     if (!audioRef.current) return;
     audioRef.current.pause();
     audioRef.current.currentTime = 0;
     setCurrentWordIndex(0);
+    setIsBuffering(false);
   };
-
   const handleTranscriptSelection = () => {
     const selection = window.getSelection()?.toString() ?? "";
     const cleaned = selection.replace(/\s+/g, " ").trim();
@@ -174,12 +226,12 @@ export default function ListeningQuestionCard({
           <p className="text-sm font-medium text-slate-700">Audio Controls</p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <Button onClick={handlePlayClick} disabled={!canPlay}>
-              {isBuffering ? "Loading audio..." : remainingPlays === null ? "Play" : remainingPlays > 0 ? `Play (${remainingPlays} left)` : "Play limit reached"}
+              {isBuffering ? "Loading audio..." : !audioSrc ? "Generate audio" : remainingPlays === null ? "Play" : remainingPlays > 0 ? `Play (${remainingPlays} left)` : "Play limit reached"}
             </Button>
-            <Button variant="secondary" onClick={handlePauseClick} disabled={!audioSrc}>
-              Pause
+            <Button variant="secondary" onClick={handlePauseClick} disabled={!audioSrc && !isPlaying}>
+              {isPlaying ? "Pause" : "Resume"}
             </Button>
-            <Button variant="secondary" onClick={handleStopClick} disabled={!audioSrc}>
+            <Button variant="secondary" onClick={handleStopClick} disabled={!audioSrc && !isPlaying}>
               Stop
             </Button>
           </div>
@@ -198,16 +250,28 @@ export default function ListeningQuestionCard({
               ))}
             </div>
           </div>
-          {audioSrc && <audio ref={audioRef} src={audioSrc} preload="auto" />}
+          <audio ref={audioRef} src={audioSrc || undefined} preload="auto" />
         </div>
 
         {showTranscript && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+            <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-700">Transcript</p>
+            {!autoScroll && (
+              <button
+                type="button"
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-500"
+                onClick={() => setAutoScroll(true)}
+              >
+                Resume auto-scroll
+              </button>
+            )}
+          </div>
             <div
               ref={transcriptRef}
               className="mt-3 max-h-48 overflow-y-auto rounded-xl bg-white p-3 text-sm leading-6 text-slate-700 scrollbar-thin"
               onMouseUp={handleTranscriptSelection}
+              onMouseEnter={() => setAutoScroll(false)}
               onWheel={() => setAutoScroll(false)}
               onScroll={() => setAutoScroll(false)}
               onPointerDown={() => setAutoScroll(false)}
@@ -260,3 +324,17 @@ export default function ListeningQuestionCard({
     </Card>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
