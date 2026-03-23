@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 
@@ -20,6 +20,11 @@ const modules = [
     title: "Listening Mock Exam",
     description: "Practice listening comprehension with ElevenLabs-generated audio MCQs.",
     href: "/listening-exam"
+  },
+  {
+    title: "Writing Module",
+    description: "Train Task 1 and Task 2 with guided steps or a full 60-minute exam simulation.",
+    href: "/writing"
   },
   {
     title: "Performance Dashboard",
@@ -55,3 +60,4 @@ export default function HomePage() {
     </AppShell>
   );
 }
+

@@ -1,18 +1,19 @@
-import os
+﻿import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from database import init_db
-from routers.dictionary import router as dictionary_router
 from routers.auth_routes import router as auth_router
+from routers.dictionary import router as dictionary_router
 from routers.exam_routes import router as exam_router
+from routers.listening_routes import router as listening_router
 from routers.passage_routes import router as passage_router
 from routers.performance_routes import router as performance_router
-from routers.listening_routes import router as listening_router
+from routers.writing_routes import router as writing_router
 
 load_dotenv()
 
@@ -50,6 +51,7 @@ app.include_router(exam_router)
 app.include_router(passage_router)
 app.include_router(performance_router)
 app.include_router(listening_router)
+app.include_router(writing_router)
 app.include_router(auth_router)
 
 
@@ -61,3 +63,4 @@ async def on_startup() -> None:
 @app.get("/")
 async def root() -> dict[str, str]:
   return {"status": "ok", "service": "tef-reading-backend"}
+

@@ -1,6 +1,6 @@
-from datetime import datetime
+﻿from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
 
 from database import Base
 
@@ -24,3 +24,23 @@ class ExamAttempt(Base):
   completion_time = Column(Integer, nullable=False)
   error_types = Column(Text, nullable=False)
   created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+class WritingSession(Base):
+  __tablename__ = "writing_sessions"
+
+  id = Column(Integer, primary_key=True, index=True)
+  user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+  session_id = Column(String(64), unique=True, index=True, nullable=False)
+  mode = Column(String(20), nullable=False)
+  task1_prompt = Column(Text, nullable=True)
+  task2_prompt = Column(Text, nullable=True)
+  task1_steps = Column(Text, nullable=True)
+  task2_steps = Column(Text, nullable=True)
+  task1_text = Column(Text, nullable=True)
+  task2_text = Column(Text, nullable=True)
+  task1_evaluation = Column(Text, nullable=True)
+  task2_evaluation = Column(Text, nullable=True)
+  is_submitted = Column(Boolean, default=False, nullable=False)
+  created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+  updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+

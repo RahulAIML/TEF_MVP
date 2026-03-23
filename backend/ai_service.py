@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import logging
@@ -493,7 +493,7 @@ Rules:
 - Question number: {question_number} of 40.
 - Question type: {label}.
 - {guidance}
-- Text length: 60 to 140 words.
+- Text length: 60 to 100 words.
 - The text must be unique within this session; do not reuse any previous situation, wording, or setting.
 - Scenario anchor: The text must take place in {place} and involve {context}.
 - Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
@@ -639,7 +639,7 @@ title
 passage
 
 Rules:
-- Passage length: 250 to 350 words.
+- Passage length: 100 to 150 words.
 - Domain: {domain}. Keep the topic focused on this domain.
 - Scenario anchor: The passage must take place in {place} and involve {context}.
 - The passage must start with a full sentence (not a heading like "Avis"). Use the title field for any heading.
@@ -696,7 +696,7 @@ correct_answer
 explanation
 
 Rules:
-- Passage length: 250 to 350 words.
+- Passage length: 200 to 250 words.
 - Domain: {domain}. Keep the topic focused on this domain.
 - Scenario anchor: The passage must take place in {place} and involve {context}.
 - The passage must start with a full sentence (not a heading like "Avis"). Use the title field for any heading.
@@ -822,4 +822,136 @@ Rules:
 
 
 
+
+
+def generate_writing_tasks() -> dict[str, str]:
+  prompt = """
+Generate TEF Canada writing Task 1 and Task 2 prompts in French.
+
+Task 1: Informative message (60-120 words), formal or semi-formal tone.
+Task 2: Argumentative text (120-200 words) with a clear opinion prompt.
+
+Return JSON with:
+{
+  "task1_prompt": "...",
+  "task2_prompt": "..."
+}
+
+Rules:
+- Output valid JSON only.
+- Prompts must be concise and exam-like.
+"""
+
+  payload = _generate_json(prompt, temperature=0.7)
+  return {
+    "task1_prompt": str(payload.get("task1_prompt", "")).strip(),
+    "task2_prompt": str(payload.get("task2_prompt", "")).strip()
+  }
+
+
+def evaluate_writing_task(task_type: str, prompt_text: str, response_text: str) -> dict[str, object]:
+  if task_type == "task1":
+    criteria = "Task completion, clarity, tone, grammar, coherence."
+    word_range = "60-120 words"
+  else:
+    criteria = "Argument quality, structure, connectors, vocabulary, grammar."
+    word_range = "120-200 words"
+
+  prompt = f"""
+You are a TEF Canada writing evaluator.
+
+Task type: {task_type}
+Word range: {word_range}
+Evaluation criteria: {criteria}
+
+Prompt:
+{prompt_text}
+
+Candidate response:
+{response_text}
+
+Return JSON with:
+{{
+  "level": "B1/B2",
+  "scores": {{
+    "structure": 0-10,
+    "grammar": 0-10,
+    "coherence": 0-10,
+    "vocab": 0-10
+  }},
+  "feedback": ["..."],
+  "improved_version": "..."
+}}
+
+Rules:
+- Use integers 0-10 for scores.
+- Provide 3-6 feedback points.
+- improved_version should stay within the word range and be better French.
+- Output valid JSON only.
+"""
+
+  payload = _generate_json(prompt, temperature=0.3)
+  scores = payload.get("scores", {}) if isinstance(payload.get("scores", {}), dict) else {}
+
+  def _clamp_score(value: object) -> int:
+    try:
+      score = int(float(value))
+    except (TypeError, ValueError):
+      return 0
+    return max(0, min(10, score))
+
+  normalized_scores = {
+    "structure": _clamp_score(scores.get("structure")),
+    "grammar": _clamp_score(scores.get("grammar")),
+    "coherence": _clamp_score(scores.get("coherence")),
+    "vocab": _clamp_score(scores.get("vocab"))
+  }
+
+  feedback = payload.get("feedback", [])
+  if isinstance(feedback, str):
+    feedback = [item.strip() for item in feedback.split("-") if item.strip()]
+  feedback = [str(item).strip() for item in feedback if str(item).strip()]
+
+  return {
+    "level": str(payload.get("level", "B1/B2")).strip(),
+    "scores": normalized_scores,
+    "feedback": feedback,
+    "improved_version": str(payload.get("improved_version", "")).strip()
+  }
+
+
+def evaluate_writing_step(task_type: str, step: str, prompt_text: str, text: str) -> dict[str, object]:
+  prompt = f"""
+You are a TEF writing coach. Provide feedback for a single step of a writing task.
+
+Task type: {task_type}
+Step: {step}
+Prompt:
+{prompt_text}
+
+Student draft for this step:
+{text}
+
+Return JSON with:
+{{
+  "feedback": ["..."],
+  "improved_version": "..."
+}}
+
+Rules:
+- Feedback should be concise and actionable (2-4 points).
+- improved_version should be a better version of the step only.
+- Output valid JSON only.
+"""
+
+  payload = _generate_json(prompt, temperature=0.4)
+  feedback = payload.get("feedback", [])
+  if isinstance(feedback, str):
+    feedback = [item.strip() for item in feedback.split("-") if item.strip()]
+  feedback = [str(item).strip() for item in feedback if str(item).strip()]
+
+  return {
+    "feedback": feedback,
+    "improved_version": str(payload.get("improved_version", "")).strip()
+  }
 

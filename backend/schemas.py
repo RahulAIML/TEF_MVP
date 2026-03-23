@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from datetime import datetime
 from typing import Dict, List, Literal
@@ -204,4 +204,69 @@ class GenerateListeningAudioRequest(BaseModel):
 
 class GenerateListeningAudioResponse(BaseModel):
   audio_url: str | None = None
+
+
+WritingTaskType = Literal["task1", "task2"]
+WritingMode = Literal["practice", "exam"]
+
+
+class GenerateWritingTasksRequest(BaseModel):
+  session_id: str | None = None
+
+
+class GenerateWritingTasksResponse(BaseModel):
+  task1_prompt: str
+  task2_prompt: str
+
+
+class WritingEvaluationRequest(BaseModel):
+  task_type: WritingTaskType
+  prompt: str
+  response_text: str
+
+
+class WritingEvaluationResponse(BaseModel):
+  level: str
+  scores: Dict[str, int]
+  feedback: List[str]
+  improved_version: str
+
+
+class WritingStepFeedbackRequest(BaseModel):
+  task_type: WritingTaskType
+  step: str
+  prompt: str
+  text: str
+
+
+class WritingStepFeedbackResponse(BaseModel):
+  feedback: List[str]
+  improved_version: str
+
+
+class WritingProgressRequest(BaseModel):
+  session_id: str
+  mode: WritingMode
+  task_type: WritingTaskType
+  steps: Dict[str, str]
+  task_prompt: str | None = None
+
+
+class WritingSubmitRequest(BaseModel):
+  session_id: str
+  mode: WritingMode
+  task1_prompt: str
+  task2_prompt: str
+  task1_text: str
+  task2_text: str
+  task1_steps: Dict[str, str] | None = None
+  task2_steps: Dict[str, str] | None = None
+
+
+class WritingSubmitResponse(BaseModel):
+  task1: WritingEvaluationResponse
+  task2: WritingEvaluationResponse
+
+class WritingProgressResponse(BaseModel):
+  status: str
 

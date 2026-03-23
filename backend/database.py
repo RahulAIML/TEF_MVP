@@ -1,4 +1,4 @@
-import os
+﻿import os
 from typing import Generator
 
 from sqlalchemy import create_engine
@@ -24,6 +24,8 @@ def get_db() -> Generator:
 
 
 def init_db() -> None:
-  from models import ExamAttempt, User
+  from models import ExamAttempt, User, WritingSession
 
   Base.metadata.create_all(bind=engine)
+
+

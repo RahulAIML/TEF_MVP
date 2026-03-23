@@ -1,4 +1,4 @@
-import type { WordMeaningRequest, WordMeaningResponse } from "@/types/dictionary";
+﻿import type { WordMeaningRequest, WordMeaningResponse } from "@/types/dictionary";
 import type {
   ExamQuestion,
   GenerateQuestionRequest,
@@ -7,8 +7,25 @@ import type {
 } from "@/types/exam";
 import type { DashboardSummaryResponse } from "@/types/dashboard";
 import type { PassageQuizResponse, PassageResponse } from "@/types/passage";
-import type { GenerateListeningQuestionRequest, ListeningQuestion, GenerateListeningAudioRequest, GenerateListeningAudioResponse } from "@/types/listening";
+import type {
+  GenerateListeningQuestionRequest,
+  ListeningQuestion,
+  GenerateListeningAudioRequest,
+  GenerateListeningAudioResponse
+} from "@/types/listening";
 import type { ExplainTextRequest, ExplainTextResponse } from "@/types/text-helper";
+import type {
+  GenerateWritingTasksRequest,
+  GenerateWritingTasksResponse,
+  WritingEvaluationRequest,
+  WritingEvaluationResponse,
+  WritingStepFeedbackRequest,
+  WritingStepFeedbackResponse,
+  WritingProgressRequest,
+  WritingProgressResponse,
+  WritingSubmitRequest,
+  WritingSubmitResponse
+} from "@/types/writing";
 import type { AuthResponse, LoginRequest, SignupRequest } from "@/types/user";
 import { getAuthToken } from "@/lib/auth";
 
@@ -146,3 +163,64 @@ export async function getDashboardSummary(): Promise<DashboardSummaryResponse> {
   });
   return parseResponse<DashboardSummaryResponse>(res);
 }
+
+export async function generateWritingTasks(
+  payload: GenerateWritingTasksRequest
+): Promise<GenerateWritingTasksResponse> {
+  const res = await fetch(`${API_BASE_URL}/generate-writing-tasks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<GenerateWritingTasksResponse>(res);
+}
+
+export async function evaluateWritingTask(
+  payload: WritingEvaluationRequest
+): Promise<WritingEvaluationResponse> {
+  const res = await fetch(`${API_BASE_URL}/evaluate-writing`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<WritingEvaluationResponse>(res);
+}
+
+export async function evaluateWritingStep(
+  payload: WritingStepFeedbackRequest
+): Promise<WritingStepFeedbackResponse> {
+  const res = await fetch(`${API_BASE_URL}/evaluate-writing-step`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<WritingStepFeedbackResponse>(res);
+}
+
+export async function saveWritingProgress(
+  payload: WritingProgressRequest
+): Promise<WritingProgressResponse> {
+  const res = await fetch(`${API_BASE_URL}/writing/save-progress`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<WritingProgressResponse>(res);
+}
+
+export async function submitWriting(
+  payload: WritingSubmitRequest
+): Promise<WritingSubmitResponse> {
+  const res = await fetch(`${API_BASE_URL}/writing/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<WritingSubmitResponse>(res);
+}
+
