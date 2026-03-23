@@ -24,8 +24,7 @@ def get_db() -> Generator:
 
 
 def init_db() -> None:
-  from models import ExamAttempt, User, WritingSession
+  from models import ExamAttempt, ListeningAttempt, User, WritingSession
 
   Base.metadata.create_all(bind=engine)
-
 

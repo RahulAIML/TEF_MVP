@@ -150,6 +150,31 @@ class ListeningQuestionResponse(BaseModel):
     return options
 
 
+class GenerateListeningAudioRequest(BaseModel):
+  script: str = Field(min_length=1)
+  question_number: int = Field(ge=1, le=40)
+  session_id: str | None = None
+
+
+class GenerateListeningAudioResponse(BaseModel):
+  audio_url: str | None = None
+
+
+class SubmitListeningExamRequest(BaseModel):
+  started_at: datetime
+  completed_at: datetime
+  score: int = Field(ge=0)
+  total: int = Field(ge=0)
+  accuracy: float = Field(ge=0, le=100)
+
+
+class SubmitListeningExamResponse(BaseModel):
+  score: int
+  total: int
+  accuracy: float
+  completion_time: int
+
+
 class ExplainTextRequest(BaseModel):
   text: str = Field(min_length=1)
 
@@ -190,20 +215,27 @@ class RecentExam(BaseModel):
   created_at: datetime
 
 
-class DashboardSummaryResponse(BaseModel):
+class ModuleExamSummary(BaseModel):
   average_accuracy: float
   recent_exams: List[RecentExam]
-  weakest_question_type: str
+  weakest_question_type: str | None = None
 
 
-class GenerateListeningAudioRequest(BaseModel):
-  script: str = Field(min_length=1)
-  question_number: int = Field(ge=1, le=40)
-  session_id: str | None = None
+class WritingSubmissionSummary(BaseModel):
+  id: int
+  average_score: float
+  created_at: datetime
 
 
-class GenerateListeningAudioResponse(BaseModel):
-  audio_url: str | None = None
+class WritingSummary(BaseModel):
+  average_score: float
+  recent_submissions: List[WritingSubmissionSummary]
+
+
+class DashboardSummaryResponse(BaseModel):
+  reading: ModuleExamSummary
+  listening: ModuleExamSummary
+  writing: WritingSummary
 
 
 WritingTaskType = Literal["task1", "task2"]
@@ -266,6 +298,7 @@ class WritingSubmitRequest(BaseModel):
 class WritingSubmitResponse(BaseModel):
   task1: WritingEvaluationResponse
   task2: WritingEvaluationResponse
+
 
 class WritingProgressResponse(BaseModel):
   status: str

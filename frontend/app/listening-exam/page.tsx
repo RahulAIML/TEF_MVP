@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
@@ -11,7 +11,7 @@ import TextExplanationCard from "@/components/TextExplanationCard";
 import TimerClock from "@/components/TimerClock";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { generateListeningQuestion, generateListeningAudio } from "@/services/api";
+import { generateListeningQuestion, generateListeningAudio, submitListeningExam } from "@/services/api";
 import type { AnswerOption } from "@/types/exam";
 import type { ExplainTextResponse } from "@/types/text-helper";
 import type { ListeningQuestion, ListeningSubmitResult } from "@/types/listening";
@@ -261,6 +261,14 @@ export default function ListeningExamPage() {
         results: detailed
       };
       setResults(payload);
+      const completedAt = new Date().toISOString();
+      void submitListeningExam({
+        started_at: startedAt,
+        completed_at: completedAt,
+        score: correct,
+        total,
+        accuracy
+      }).catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit exam.");
     } finally {
@@ -593,6 +601,12 @@ export default function ListeningExamPage() {
     </AppShell>
   );
 }
+
+
+
+
+
+
 
 
 

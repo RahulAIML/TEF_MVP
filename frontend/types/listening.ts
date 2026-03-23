@@ -1,4 +1,4 @@
-import type { AnswerOption } from "@/types/exam";
+﻿import type { AnswerOption } from "@/types/exam";
 
 export interface GenerateListeningQuestionRequest {
   question_number: number;
@@ -40,3 +40,19 @@ export interface ListeningSubmitResult {
   accuracy: number;
   results: ListeningResultItem[];
 }
+
+export interface SubmitListeningExamRequest {
+  started_at: string;
+  completed_at: string;
+  score: number;
+  total: number;
+  accuracy: number;
+}
+
+export interface SubmitListeningExamResponse {
+  score: number;
+  total: number;
+  accuracy: number;
+  completion_time: number;
+}
+

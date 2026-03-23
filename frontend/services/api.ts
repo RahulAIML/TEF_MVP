@@ -11,7 +11,9 @@ import type {
   GenerateListeningQuestionRequest,
   ListeningQuestion,
   GenerateListeningAudioRequest,
-  GenerateListeningAudioResponse
+  GenerateListeningAudioResponse,
+  SubmitListeningExamRequest,
+  SubmitListeningExamResponse
 } from "@/types/listening";
 import type { ExplainTextRequest, ExplainTextResponse } from "@/types/text-helper";
 import type {
@@ -88,6 +90,18 @@ export async function generateListeningAudio(
     cache: "no-store"
   });
   return parseResponse<GenerateListeningAudioResponse>(res);
+}
+
+export async function submitListeningExam(
+  payload: SubmitListeningExamRequest
+): Promise<SubmitListeningExamResponse> {
+  const res = await fetch(`${API_BASE_URL}/submit-listening-exam`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<SubmitListeningExamResponse>(res);
 }
 
 export async function generateQuestion(

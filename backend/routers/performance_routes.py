@@ -1,4 +1,4 @@
-import json
+﻿import json
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
@@ -6,8 +6,14 @@ from sqlalchemy.orm import Session
 
 from auth import get_optional_user
 from database import get_db
-from models import ExamAttempt, User
-from schemas import DashboardSummaryResponse, RecentExam
+from models import ExamAttempt, ListeningAttempt, User, WritingSession
+from schemas import (
+  DashboardSummaryResponse,
+  ModuleExamSummary,
+  RecentExam,
+  WritingSubmissionSummary,
+  WritingSummary
+)
 
 router = APIRouter(tags=["performance"])
 
@@ -20,16 +26,50 @@ QUESTION_TYPE_LABELS = {
 }
 
 
+def _build_recent_exams(attempts: list[ExamAttempt | ListeningAttempt]) -> list[RecentExam]:
+  return [
+    RecentExam(
+      id=attempt.id,
+      score=attempt.score,
+      accuracy=float(attempt.accuracy),
+      created_at=attempt.created_at
+    )
+    for attempt in attempts
+  ]
+
+
+def _parse_eval_score(payload: str | None) -> float | None:
+  if not payload:
+    return None
+  try:
+    data = json.loads(payload)
+  except json.JSONDecodeError:
+    return None
+  scores = data.get("scores") if isinstance(data, dict) else None
+  if not isinstance(scores, dict):
+    return None
+  values = []
+  for key in ("structure", "grammar", "coherence", "vocab"):
+    value = scores.get(key)
+    try:
+      values.append(float(value))
+    except (TypeError, ValueError):
+      continue
+  if not values:
+    return None
+  return sum(values) / len(values)
+
+
 @router.get("/dashboard/summary", response_model=DashboardSummaryResponse)
 async def get_dashboard_summary(
   db: Session = Depends(get_db),
   user: User = Depends(get_optional_user)
 ) -> DashboardSummaryResponse:
-  average_accuracy = db.query(func.coalesce(func.avg(ExamAttempt.accuracy), 0)).filter(
+  reading_avg = db.query(func.coalesce(func.avg(ExamAttempt.accuracy), 0)).filter(
     ExamAttempt.user_id == user.id
   ).scalar()
 
-  recent_attempts = (
+  reading_attempts = (
     db.query(ExamAttempt)
     .filter(ExamAttempt.user_id == user.id)
     .order_by(ExamAttempt.created_at.desc())
@@ -52,18 +92,64 @@ async def get_dashboard_summary(
 
   weakest_label = QUESTION_TYPE_LABELS.get(weakest_key, "Not enough data")
 
-  recent_exams = [
-    RecentExam(
-      id=attempt.id,
-      score=attempt.score,
-      accuracy=float(attempt.accuracy),
-      created_at=attempt.created_at
-    )
-    for attempt in recent_attempts
-  ]
-
-  return DashboardSummaryResponse(
-    average_accuracy=round(float(average_accuracy or 0), 2),
-    recent_exams=recent_exams,
+  reading_summary = ModuleExamSummary(
+    average_accuracy=round(float(reading_avg or 0), 2),
+    recent_exams=_build_recent_exams(reading_attempts),
     weakest_question_type=weakest_label
   )
+
+  listening_avg = db.query(func.coalesce(func.avg(ListeningAttempt.accuracy), 0)).filter(
+    ListeningAttempt.user_id == user.id
+  ).scalar()
+  listening_attempts = (
+    db.query(ListeningAttempt)
+    .filter(ListeningAttempt.user_id == user.id)
+    .order_by(ListeningAttempt.created_at.desc())
+    .limit(3)
+    .all()
+  )
+
+  listening_summary = ModuleExamSummary(
+    average_accuracy=round(float(listening_avg or 0), 2),
+    recent_exams=_build_recent_exams(listening_attempts),
+    weakest_question_type="Not tracked"
+  )
+
+  writing_sessions = (
+    db.query(WritingSession)
+    .filter(WritingSession.user_id == user.id, WritingSession.is_submitted.is_(True))
+    .order_by(WritingSession.updated_at.desc())
+    .all()
+  )
+
+  submission_summaries: list[WritingSubmissionSummary] = []
+  submission_scores: list[float] = []
+  for session in writing_sessions:
+    task1_score = _parse_eval_score(session.task1_evaluation)
+    task2_score = _parse_eval_score(session.task2_evaluation)
+    scores = [score for score in (task1_score, task2_score) if score is not None]
+    if not scores:
+      continue
+    average_score = sum(scores) / len(scores)
+    submission_scores.append(average_score)
+    if len(submission_summaries) < 3:
+      submission_summaries.append(
+        WritingSubmissionSummary(
+          id=session.id,
+          average_score=round(average_score, 2),
+          created_at=session.updated_at
+        )
+      )
+
+  writing_average = round(sum(submission_scores) / len(submission_scores), 2) if submission_scores else 0.0
+  writing_summary = WritingSummary(
+    average_score=writing_average,
+    recent_submissions=submission_summaries
+  )
+
+  return DashboardSummaryResponse(
+    reading=reading_summary,
+    listening=listening_summary,
+    writing=writing_summary
+  )
+

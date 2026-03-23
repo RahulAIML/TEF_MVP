@@ -25,6 +25,19 @@ class ExamAttempt(Base):
   error_types = Column(Text, nullable=False)
   created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+
+class ListeningAttempt(Base):
+  __tablename__ = "listening_attempts"
+
+  id = Column(Integer, primary_key=True, index=True)
+  user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+  score = Column(Integer, nullable=False)
+  total = Column(Integer, nullable=False)
+  accuracy = Column(Float, nullable=False)
+  completion_time = Column(Integer, nullable=False)
+  created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class WritingSession(Base):
   __tablename__ = "writing_sessions"
 
