@@ -99,6 +99,20 @@ RECENT_LISTENING_HASHES_GLOBAL: deque[str] = deque(maxlen=LISTENING_HASHES_PER_S
 RECENT_LISTENING_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
 RECENT_LISTENING_SCRIPT_HASHES_ALL_GLOBAL: deque[str] = deque(maxlen=LISTENING_HASHES_PER_SESSION_ALL)
 
+SPEAKING_ROLE_PLAYS = [
+  "Vous etes agent immobilier et parlez a un locataire qui souhaite louer un appartement.",
+  "Vous etes recruteur et menez un entretien pour un poste a temps partiel.",
+  "Vous etes responsable d'un centre culturel et expliquez une inscription.",
+  "Vous etes receptionniste d'hotel et repondez aux questions d'un client."
+]
+
+SPEAKING_OPINION_TOPICS = [
+  "Le teletravail est-il benefique pour tous ?",
+  "Faut-il interdire les voitures en centre-ville ?",
+  "Les reseaux sociaux ont-ils un impact positif ?",
+  "Doit-on encourager les transports en commun ?"
+]
+
 QUESTION_PROFILES = [
   (1, 7, "everyday_life", "Everyday-life document"),
   (8, 17, "gap_fill", "Incomplete sentences / gap-fill text"),
@@ -144,7 +158,7 @@ def _generate_json(prompt: str, temperature: float = 0.7) -> Dict[str, Any]:
       )
     )
   except Exception as error:
-    raise RuntimeError(f"Gemini generate_content failed with model '{MODEL_NAME}': {error}") from error
+    raise RuntimeError(f"Gemini generate_content failed with model '{SPEAKING_MODEL_NAME}': {error}") from error
 
   if not getattr(response, "text", None):
     raise RuntimeError("Gemini returned an empty response.")
@@ -165,7 +179,7 @@ def _generate_text(prompt: str, temperature: float = 0.4) -> str:
       )
     )
   except Exception as error:
-    raise RuntimeError(f"Gemini generate_content failed with model '{MODEL_NAME}': {error}") from error
+    raise RuntimeError(f"Gemini generate_content failed with model '{SPEAKING_MODEL_NAME}': {error}") from error
 
   if not getattr(response, "text", None):
     raise RuntimeError("Gemini returned an empty response.")
@@ -471,6 +485,12 @@ def _generate_gemini_tts_audio(script: str, question_number: int, session_id: st
   logger.info("Gemini TTS success: bytes=%s file=%s", len(wav_bytes), file_name)
 
   return f"/audio/{file_name}"
+
+
+def _pick_speaking_prompt(task_type: str) -> str:
+  if task_type == "role_play":
+    return random.choice(SPEAKING_ROLE_PLAYS)
+  return random.choice(SPEAKING_OPINION_TOPICS)
 
 
 def _pick_domain() -> str:
@@ -1058,7 +1078,8 @@ def generate_speaking_audio(script: str, session_id: str | None = None) -> str:
     payload = {
       "text": script,
       "model_id": "eleven_multilingual_v2",
-      "optimize_streaming_latency": 2
+      "optimize_streaming_latency": ELEVENLABS_OPTIMIZE_LATENCY,
+      "output_format": ELEVENLABS_OUTPUT_FORMAT
     }
     headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
 
@@ -1094,20 +1115,42 @@ def generate_speaking_reply(
   message: str,
   history: list[dict[str, str]],
   task_type: str,
+  mode: str = "practice",
+  hints: bool = False,
   session_id: str | None = None
 ) -> dict[str, str]:
-  history_text = _format_conversation_history(history)
-  prompt = f"""
+  hints_note = "\n- After your response, add a short coaching tip in parentheses (English, max 10 words)." if hints else ""
+  starter = message.strip()
+  if starter in {"", "__START__"}:
+    scenario = _pick_speaking_prompt(task_type)
+    prompt = f"""
 You are a TEF Canada speaking examiner.
 
 Rules:
-
 - Respond in French
-- Keep responses SHORT (1–2 sentences)
+- Keep responses SHORT (1-2 sentences)
 - Always ask a follow-up question
 - Be natural and conversational
-- Use B1–B2 level French
-- Do not explain grammar
+- Use B1-B2 level French
+- Do not explain grammar{hints_note}
+
+Task type: {task_type}
+Scenario or topic: {scenario}
+
+Start the conversation like a real examiner. Ask the first question.
+"""
+  else:
+    history_text = _format_conversation_history(history)
+    prompt = f"""
+You are a TEF Canada speaking examiner.
+
+Rules:
+- Respond in French
+- Keep responses SHORT (1-2 sentences)
+- Always ask a follow-up question
+- Be natural and conversational
+- Use B1-B2 level French
+- Do not explain grammar{hints_note}
 
 Task type: {task_type}
 
@@ -1128,12 +1171,15 @@ Respond like a real examiner.
       reply = truncated[:sentence_end + 1]
     else:
       reply = truncated.rsplit(' ', 1)[0] or truncated
-  audio_url = generate_speaking_audio(reply, session_id)
+  audio_url: str | None = None
+  try:
+    audio_url = generate_speaking_audio(reply, session_id)
+  except Exception as tts_error:
+    logger.warning("TTS generation failed (text-only fallback): %s", tts_error)
   return {
     "reply": reply,
     "audio_url": audio_url
   }
-
 
 def evaluate_speaking_conversation(history: list[dict[str, str]], task_type: str) -> dict[str, object]:
   history_text = _format_conversation_history(history)
@@ -1184,5 +1230,6 @@ Rules:
     "feedback": feedback,
     "improved_response": str(payload.get("improved_response", "")).strip()
   }
+
 
 

@@ -1,5 +1,6 @@
 ﻿"use client";
 
+import { useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ConversationMessage } from "@/types/speaking";
 
@@ -7,24 +8,45 @@ interface SpeakingChatProps {
   history: ConversationMessage[];
   isThinking?: boolean;
   currentTranscript?: string;
+  exchangeCount?: number;
+  maxExchanges?: number;
 }
 
-export default function SpeakingChat({ history, isThinking, currentTranscript }: SpeakingChatProps) {
+export default function SpeakingChat({
+  history,
+  isThinking,
+  currentTranscript,
+  exchangeCount,
+  maxExchanges
+}: SpeakingChatProps) {
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [history, isThinking]);
+
   return (
     <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardContent className="space-y-4 p-6">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold text-slate-900">Conversation</h3>
-          {isThinking && (
-            <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-              Examiner is thinking...
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {maxExchanges !== undefined && exchangeCount !== undefined && (
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500">
+                {exchangeCount}/{maxExchanges} exchanges
+              </span>
+            )}
+            {isThinking && (
+              <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+                Examiner is responding...
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="max-h-[420px] space-y-3 overflow-y-auto pr-2">
-          {history.length === 0 && (
-            <p className="text-sm text-slate-500">Start speaking to begin the conversation.</p>
+          {history.length === 0 && !isThinking && (
+            <p className="text-sm text-slate-500">Press Start — the examiner will speak first.</p>
           )}
           {history.map((message, index) => (
             <div
@@ -41,6 +63,12 @@ export default function SpeakingChat({ history, isThinking, currentTranscript }:
               <p className="mt-1 whitespace-pre-line">{message.content}</p>
             </div>
           ))}
+          {isThinking && (
+            <div className="rounded-xl bg-indigo-50 px-4 py-3 text-sm text-slate-500 italic">
+              Examiner is responding...
+            </div>
+          )}
+          <div ref={bottomRef} />
         </div>
 
         {currentTranscript && (

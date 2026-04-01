@@ -23,6 +23,8 @@ async def post_conversation(
       message=payload.message,
       history=[item.model_dump() for item in payload.history],
       task_type=payload.task_type,
+      mode=payload.mode or "practice",
+      hints=payload.hints,
       session_id=payload.session_id
     )
   except RuntimeError as error:

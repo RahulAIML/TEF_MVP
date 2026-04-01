@@ -54,6 +54,7 @@ app.include_router(performance_router)
 app.include_router(listening_router)
 app.include_router(writing_router)
 app.include_router(auth_router)
+app.include_router(speaking_router)
 
 
 @app.on_event("startup")

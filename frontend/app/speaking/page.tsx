@@ -18,6 +18,7 @@ import type {
 
 const EXAM_DURATION_SECONDS = 15 * 60;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const MAX_EXCHANGES = 5;
 
 const initialHints = [
   "Answer in 1–2 sentences.",
@@ -41,11 +42,13 @@ export default function SpeakingPage() {
   const [handsFreeEnabled, setHandsFreeEnabled] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+  const [userTurnCount, setUserTurnCount] = useState(0);
 
   const historyRef = useRef<ConversationMessage[]>([]);
   const sessionIdRef = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recorderRef = useRef<SpeakingRecorderHandle | null>(null);
+  const pendingEvaluateRef = useRef(false);
 
   useEffect(() => {
     historyRef.current = history;
@@ -69,6 +72,7 @@ export default function SpeakingPage() {
   const resetSession = useCallback(() => {
     recorderRef.current?.stop();
     stopAudio();
+    pendingEvaluateRef.current = false;
     setHistory([]);
     setTranscript("");
     setEvaluation(null);
@@ -76,6 +80,7 @@ export default function SpeakingPage() {
     setIsThinking(false);
     setTimerActive(false);
     setIsExamStarted(false);
+    setUserTurnCount(0);
     sessionIdRef.current = null;
   }, [stopAudio]);
 
@@ -97,8 +102,42 @@ export default function SpeakingPage() {
       setTimerActive(true);
       setIsExamStarted(true);
     }
-    if (handsFreeEnabled) {
-      window.setTimeout(() => startListening(), 400);
+    window.setTimeout(() => startExaminer(), 400);
+  };
+
+  const startExaminer = async () => {
+    setError("");
+    setEvaluation(null);
+    setTranscript("");
+    setIsThinking(true);
+    try {
+      const response = await sendConversation({
+        message: "__START__",
+        history: [],
+        task_type: taskType,
+        mode,
+        hints: mode === "practice" && hintsEnabled,
+        session_id: sessionIdRef.current ?? undefined
+      });
+      const assistantMessage: ConversationMessage = {
+        role: "assistant",
+        content: response.reply
+      };
+      setHistory([assistantMessage]);
+      const audio = buildAudioUrl(response.audio_url);
+      if (audio && audioRef.current) {
+        audioRef.current.src = audio;
+        const playPromise = audioRef.current.play();
+        if (playPromise) {
+          playPromise.catch(() => undefined);
+        }
+      } else if (handsFreeEnabled) {
+        window.setTimeout(() => startListening(), 400);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start conversation.");
+    } finally {
+      setIsThinking(false);
     }
   };
 
@@ -118,6 +157,13 @@ export default function SpeakingPage() {
     setError("");
     setTranscript(text);
     setEvaluation(null);
+    if (isAudioPlaying) {
+      stopAudio();
+    }
+
+    const nextTurnCount = userTurnCount + 1;
+    setUserTurnCount(nextTurnCount);
+    const isLastTurn = nextTurnCount >= MAX_EXCHANGES;
 
     const previousHistory = historyRef.current;
     const nextHistory: ConversationMessage[] = [...previousHistory, { role: "user", content: text }];
@@ -141,11 +187,15 @@ export default function SpeakingPage() {
       setHistory((prev) => [...prev, assistantMessage]);
       const audio = buildAudioUrl(response.audio_url);
       if (audio && audioRef.current) {
+        // If last turn: let audio play, then evaluate when it ends
+        if (isLastTurn) pendingEvaluateRef.current = true;
         audioRef.current.src = audio;
         const playPromise = audioRef.current.play();
         if (playPromise) {
           playPromise.catch(() => undefined);
         }
+      } else if (isLastTurn) {
+        window.setTimeout(() => void handleEvaluate(), 400);
       } else if (handsFreeEnabled) {
         window.setTimeout(() => startListening(), 400);
       }
@@ -198,12 +248,15 @@ export default function SpeakingPage() {
     [taskType]
   );
 
+  const isSessionActive = history.length > 0 || isThinking;
+
   return (
     <AppShell title="Speaking Module" subtitle="Real-time TEF Canada speaking practice">
       <div className="space-y-6">
         <div className="flex flex-wrap items-center gap-3">
           <Button
             variant={mode === "practice" ? "default" : "outline"}
+            disabled={isSessionActive}
             onClick={() => {
               setMode("practice");
               resetSession();
@@ -213,6 +266,7 @@ export default function SpeakingPage() {
           </Button>
           <Button
             variant={mode === "exam" ? "default" : "outline"}
+            disabled={isSessionActive}
             onClick={() => {
               setMode("exam");
               resetSession();
@@ -235,12 +289,14 @@ export default function SpeakingPage() {
         <div className="flex flex-wrap gap-3">
           <Button
             variant={taskType === "role_play" ? "default" : "outline"}
+            disabled={isSessionActive}
             onClick={() => setTaskType("role_play")}
           >
             Role Play (Task 1)
           </Button>
           <Button
             variant={taskType === "opinion" ? "default" : "outline"}
+            disabled={isSessionActive}
             onClick={() => setTaskType("opinion")}
           >
             Opinion (Task 2)
@@ -311,8 +367,11 @@ export default function SpeakingPage() {
                     onPause={() => setIsAudioPlaying(false)}
                     onEnded={() => {
                       setIsAudioPlaying(false);
-                      if (handsFreeEnabled) {
-                        startListening();
+                      if (pendingEvaluateRef.current) {
+                        pendingEvaluateRef.current = false;
+                        window.setTimeout(() => void handleEvaluate(), 400);
+                      } else if (handsFreeEnabled) {
+                        window.setTimeout(() => startListening(), 400);
                       }
                     }}
                   />
@@ -321,14 +380,25 @@ export default function SpeakingPage() {
                   ref={recorderRef}
                   onTranscript={handleTranscript}
                   onError={(message) => setError(message)}
+                  onNoSpeech={() => {
+                    if (handsFreeEnabled && !isThinking) {
+                      window.setTimeout(() => startListening(), 600);
+                    }
+                  }}
                   onListeningChange={setIsListening}
-                  isDisabled={isThinking || (mode === "exam" && !isExamStarted)}
+                  isDisabled={isThinking || (mode === "exam" && !isExamStarted) || !!evaluation}
                 />
                 <p className="text-sm text-slate-500">{statusLabel}</p>
               </CardContent>
             </Card>
 
-            <SpeakingChat history={history} isThinking={isThinking} currentTranscript={transcript} />
+            <SpeakingChat
+              history={history}
+              isThinking={isThinking}
+              currentTranscript={transcript}
+              exchangeCount={userTurnCount}
+              maxExchanges={MAX_EXCHANGES}
+            />
           </div>
 
           <div className="space-y-4">
@@ -403,4 +473,5 @@ export default function SpeakingPage() {
     </AppShell>
   );
 }
+
 

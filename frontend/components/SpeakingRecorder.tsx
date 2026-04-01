@@ -13,6 +13,7 @@ interface SpeakingRecorderProps {
   isDisabled?: boolean;
   onTranscript: (transcript: string) => void;
   onError?: (message: string) => void;
+  onNoSpeech?: () => void;
   onListeningChange?: (listening: boolean) => void;
 }
 
@@ -51,6 +52,7 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
     isDisabled = false,
     onTranscript,
     onError,
+    onNoSpeech,
     onListeningChange
   },
   ref
@@ -90,7 +92,18 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
     };
 
     recognition.onerror = (event) => {
-      onError?.(event.error ?? "Speech recognition error.");
+      const code = event.error ?? "";
+      if (code === "no-speech" || code === "audio-capture") {
+        onNoSpeech?.();
+        return;
+      }
+      const messages: Record<string, string> = {
+        "not-allowed": "Microphone access denied. Please allow microphone access.",
+        "network": "Network error during speech recognition.",
+        "aborted": ""
+      };
+      const msg = messages[code] ?? `Speech recognition error: ${code}`;
+      if (msg) onError?.(msg);
     };
 
     recognition.onend = () => {
@@ -109,6 +122,8 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
     start: startListening,
     stop: stopListening
   }), [startListening, stopListening]);
+
+  // expose isListening so parent can read it if needed
 
   return (
     <div className="flex flex-wrap items-center gap-3">
