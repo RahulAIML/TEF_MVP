@@ -1,7 +1,12 @@
 ﻿"use client";
 
-import { useCallback, useRef, useState } from "react";
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+
+export interface SpeakingRecorderHandle {
+  start: () => void;
+  stop: () => void;
+}
 
 interface SpeakingRecorderProps {
   language?: string;
@@ -40,13 +45,16 @@ interface SpeechRecognitionLike {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-export default function SpeakingRecorder({
-  language = "fr-FR",
-  isDisabled = false,
-  onTranscript,
-  onError,
-  onListeningChange
-}: SpeakingRecorderProps) {
+const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProps>(function SpeakingRecorder(
+  {
+    language = "fr-FR",
+    isDisabled = false,
+    onTranscript,
+    onError,
+    onListeningChange
+  },
+  ref
+) {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
@@ -97,6 +105,11 @@ export default function SpeakingRecorder({
     recognition.start();
   }, [isDisabled, language, onError, onListeningChange, onTranscript]);
 
+  useImperativeHandle(ref, () => ({
+    start: startListening,
+    stop: stopListening
+  }), [startListening, stopListening]);
+
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Button onClick={isListening ? stopListening : startListening} disabled={isDisabled}>
@@ -107,5 +120,7 @@ export default function SpeakingRecorder({
       </p>
     </div>
   );
-}
+});
+
+export default SpeakingRecorder;
 

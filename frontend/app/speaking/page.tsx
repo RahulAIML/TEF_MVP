@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AppShell from "@/components/AppShell";
 import SpeakingChat from "@/components/SpeakingChat";
-import SpeakingRecorder from "@/components/SpeakingRecorder";
+import SpeakingRecorder, { SpeakingRecorderHandle } from "@/components/SpeakingRecorder";
 import TimerClock from "@/components/TimerClock";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +20,7 @@ const EXAM_DURATION_SECONDS = 15 * 60;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 const initialHints = [
-  "Answer in 1â€“2 sentences.",
+  "Answer in 1–2 sentences.",
   "Use simple connectors (par exemple: d'abord, ensuite).",
   "Stay polite and natural.",
   "Ask a short follow-up question back."
@@ -38,10 +38,14 @@ export default function SpeakingPage() {
   const [timerActive, setTimerActive] = useState(false);
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [hintsEnabled, setHintsEnabled] = useState(true);
+  const [handsFreeEnabled, setHandsFreeEnabled] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   const historyRef = useRef<ConversationMessage[]>([]);
   const sessionIdRef = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const recorderRef = useRef<SpeakingRecorderHandle | null>(null);
 
   useEffect(() => {
     historyRef.current = history;
@@ -54,7 +58,17 @@ export default function SpeakingPage() {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   };
 
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    setIsAudioPlaying(false);
+  }, []);
+
   const resetSession = useCallback(() => {
+    recorderRef.current?.stop();
+    stopAudio();
     setHistory([]);
     setTranscript("");
     setEvaluation(null);
@@ -63,7 +77,17 @@ export default function SpeakingPage() {
     setTimerActive(false);
     setIsExamStarted(false);
     sessionIdRef.current = null;
-  }, []);
+  }, [stopAudio]);
+
+  const startListening = useCallback(() => {
+    if (isThinking) return;
+    if (mode === "exam" && !isExamStarted) return;
+    if (isListening) return;
+    if (isAudioPlaying) {
+      stopAudio();
+    }
+    recorderRef.current?.start();
+  }, [isThinking, mode, isExamStarted, isListening, isAudioPlaying, stopAudio]);
 
   const startSession = () => {
     resetSession();
@@ -72,6 +96,9 @@ export default function SpeakingPage() {
       setTimerKey((prev) => prev + 1);
       setTimerActive(true);
       setIsExamStarted(true);
+    }
+    if (handsFreeEnabled) {
+      window.setTimeout(() => startListening(), 400);
     }
   };
 
@@ -119,6 +146,8 @@ export default function SpeakingPage() {
         if (playPromise) {
           playPromise.catch(() => undefined);
         }
+      } else if (handsFreeEnabled) {
+        window.setTimeout(() => startListening(), 400);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to get examiner response.");
@@ -134,6 +163,8 @@ export default function SpeakingPage() {
     }
     setError("");
     setIsThinking(true);
+    recorderRef.current?.stop();
+    stopAudio();
     try {
       const result = await evaluateSpeaking({
         history: historyRef.current,
@@ -153,6 +184,14 @@ export default function SpeakingPage() {
     if (!isExamStarted) return;
     void handleEvaluate();
   };
+
+  const statusLabel = useMemo(() => {
+    if (mode === "exam" && !isExamStarted) return "Start the exam to begin.";
+    if (isThinking) return "Examiner is thinking...";
+    if (isAudioPlaying) return "Examiner is speaking...";
+    if (isListening) return "Listening...";
+    return handsFreeEnabled ? "Hands-free active." : "Ready.";
+  }, [isThinking, isAudioPlaying, isListening, handsFreeEnabled, mode, isExamStarted]);
 
   const taskLabel = useMemo(
     () => (taskType === "role_play" ? "Task 1: Role-play" : "Task 2: Opinion discussion"),
@@ -209,6 +248,12 @@ export default function SpeakingPage() {
           <Button variant="secondary" onClick={resetSession}>
             Reset Conversation
           </Button>
+          <Button
+            variant={handsFreeEnabled ? "default" : "outline"}
+            onClick={() => setHandsFreeEnabled((prev) => !prev)}
+          >
+            Hands-Free {handsFreeEnabled ? "On" : "Off"}
+          </Button>
         </div>
 
         {mode === "exam" && !isExamStarted && (
@@ -253,18 +298,33 @@ export default function SpeakingPage() {
           <div className="space-y-4">
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="space-y-3 p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase text-slate-400">Active Task</p>
                     <h2 className="text-lg font-semibold text-slate-900">{taskLabel}</h2>
                   </div>
-                  <audio ref={audioRef} controls className="w-40" />
+                  <audio
+                    ref={audioRef}
+                    controls
+                    className="w-44"
+                    onPlay={() => setIsAudioPlaying(true)}
+                    onPause={() => setIsAudioPlaying(false)}
+                    onEnded={() => {
+                      setIsAudioPlaying(false);
+                      if (handsFreeEnabled) {
+                        startListening();
+                      }
+                    }}
+                  />
                 </div>
                 <SpeakingRecorder
+                  ref={recorderRef}
                   onTranscript={handleTranscript}
                   onError={(message) => setError(message)}
+                  onListeningChange={setIsListening}
                   isDisabled={isThinking || (mode === "exam" && !isExamStarted)}
                 />
+                <p className="text-sm text-slate-500">{statusLabel}</p>
               </CardContent>
             </Card>
 
@@ -343,5 +403,4 @@ export default function SpeakingPage() {
     </AppShell>
   );
 }
-
 
