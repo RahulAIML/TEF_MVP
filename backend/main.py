@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -64,6 +64,7 @@ async def on_startup() -> None:
 @app.get("/")
 async def root() -> dict[str, str]:
   return {"status": "ok", "service": "tef-reading-backend"}
+
 
 
 
