@@ -24,12 +24,17 @@ from schemas import ExamQuestion, PassageQuizResponse, PassageResponse, WordMean
 load_dotenv()
 
 logger = logging.getLogger('tef.tts')
+ELEVENLABS_SESSION = requests.Session()
 
 MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+SPEAKING_MODEL_NAME = os.getenv("GEMINI_SPEAKING_MODEL", MODEL_NAME)
 API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
+ELEVENLABS_OUTPUT_FORMAT = os.getenv("ELEVENLABS_OUTPUT_FORMAT", "mp3_22050_32")
+ELEVENLABS_OPTIMIZE_LATENCY = int(os.getenv("ELEVENLABS_OPTIMIZE_LATENCY", "4"))
+SPEAKING_MAX_CHARS = int(os.getenv("SPEAKING_MAX_CHARS", "280"))
 AUDIO_STORAGE_PATH = os.getenv("AUDIO_STORAGE_PATH", os.path.join(os.path.dirname(__file__), "data", "audio"))
 
 DOMAINS = [
@@ -129,7 +134,7 @@ def _extract_json_payload(text: str) -> Dict[str, Any]:
 def _generate_json(prompt: str, temperature: float = 0.7) -> Dict[str, Any]:
   _ensure_api_key()
   genai.configure(api_key=API_KEY)
-  model = genai.GenerativeModel(MODEL_NAME)
+  model = genai.GenerativeModel(SPEAKING_MODEL_NAME)
   try:
     response = model.generate_content(
       prompt,
@@ -150,7 +155,7 @@ def _generate_json(prompt: str, temperature: float = 0.7) -> Dict[str, Any]:
 def _generate_text(prompt: str, temperature: float = 0.4) -> str:
   _ensure_api_key()
   genai.configure(api_key=API_KEY)
-  model = genai.GenerativeModel(MODEL_NAME)
+  model = genai.GenerativeModel(SPEAKING_MODEL_NAME)
   try:
     response = model.generate_content(
       prompt,
@@ -386,7 +391,8 @@ def _generate_tts_audio(script: str, question_number: int, session_id: str | Non
   payload = {
     "text": script,
     "model_id": "eleven_multilingual_v2",
-    "optimize_streaming_latency": 2
+    "optimize_streaming_latency": ELEVENLABS_OPTIMIZE_LATENCY,
+    "output_format": ELEVENLABS_OUTPUT_FORMAT
   }
   headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
 
@@ -398,7 +404,7 @@ def _generate_tts_audio(script: str, question_number: int, session_id: str | Non
   )
 
   try:
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    response = ELEVENLABS_SESSION.post(url, headers=headers, json=payload, timeout=30)
     response.raise_for_status()
   except requests.RequestException as error:
     logger.warning("ElevenLabs TTS failed: %s. Falling back to Gemini TTS.", error)
@@ -1063,7 +1069,7 @@ def generate_speaking_audio(script: str, session_id: str | None = None) -> str:
     )
 
     try:
-      response = requests.post(url, headers=headers, json=payload, timeout=30)
+      response = ELEVENLABS_SESSION.post(url, headers=headers, json=payload, timeout=30)
       response.raise_for_status()
       file_name = f"{file_stub}.mp3"
       file_path = os.path.join(AUDIO_STORAGE_PATH, file_name)
@@ -1115,6 +1121,13 @@ Respond like a real examiner.
 """
 
   reply = _generate_text(prompt, temperature=0.4)
+  if len(reply) > SPEAKING_MAX_CHARS:
+    truncated = reply[:SPEAKING_MAX_CHARS]
+    sentence_end = max(truncated.rfind('.'), truncated.rfind('?'), truncated.rfind('!'))
+    if sentence_end >= max(40, SPEAKING_MAX_CHARS // 2):
+      reply = truncated[:sentence_end + 1]
+    else:
+      reply = truncated.rsplit(' ', 1)[0] or truncated
   audio_url = generate_speaking_audio(reply, session_id)
   return {
     "reply": reply,
@@ -1171,4 +1184,5 @@ Rules:
     "feedback": feedback,
     "improved_response": str(payload.get("improved_response", "")).strip()
   }
+
 
