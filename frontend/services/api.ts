@@ -16,6 +16,7 @@ import type {
   SubmitListeningExamResponse
 } from "@/types/listening";
 import type { ExplainTextRequest, ExplainTextResponse } from "@/types/text-helper";
+import type { ConversationRequest, ConversationResponse, SpeakingEvaluationRequest, SpeakingEvaluationResponse } from "@/types/speaking";
 import type {
   GenerateWritingTasksRequest,
   GenerateWritingTasksResponse,
@@ -236,5 +237,30 @@ export async function submitWriting(
     cache: "no-store"
   });
   return parseResponse<WritingSubmitResponse>(res);
+}
+
+
+export async function sendConversation(
+  payload: ConversationRequest
+): Promise<ConversationResponse> {
+  const res = await fetch(`${API_BASE_URL}/conversation`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<ConversationResponse>(res);
+}
+
+export async function evaluateSpeaking(
+  payload: SpeakingEvaluationRequest
+): Promise<SpeakingEvaluationResponse> {
+  const res = await fetch(`${API_BASE_URL}/evaluate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<SpeakingEvaluationResponse>(res);
 }
 

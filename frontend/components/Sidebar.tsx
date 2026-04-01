@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, BookOpenCheck, Headphones, FileText, PenSquare } from "lucide-react";
+import { LayoutDashboard, BookOpenCheck, Headphones, FileText, PenSquare, Mic } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/mock-exam", label: "Reading Mock Exam", icon: BookOpenCheck },
   { href: "/listening-exam", label: "Listening Practice", icon: Headphones },
+  { href: "/speaking", label: "Speaking Module", icon: Mic },
   { href: "/writing", label: "Writing Module", icon: PenSquare },
   { href: "/passage-analyzer", label: "Passage Analyzer", icon: FileText }
 ];

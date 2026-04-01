@@ -13,6 +13,7 @@ from routers.exam_routes import router as exam_router
 from routers.listening_routes import router as listening_router
 from routers.passage_routes import router as passage_router
 from routers.performance_routes import router as performance_router
+from routers.speaking_routes import router as speaking_router
 from routers.writing_routes import router as writing_router
 
 load_dotenv()
@@ -63,4 +64,6 @@ async def on_startup() -> None:
 @app.get("/")
 async def root() -> dict[str, str]:
   return {"status": "ok", "service": "tef-reading-backend"}
+
+
 

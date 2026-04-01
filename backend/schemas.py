@@ -303,3 +303,42 @@ class WritingSubmitResponse(BaseModel):
 class WritingProgressResponse(BaseModel):
   status: str
 
+
+
+SpeakingTaskType = Literal["role_play", "opinion"]
+SpeakingMode = Literal["practice", "exam"]
+
+
+class ConversationMessage(BaseModel):
+  role: Literal["user", "assistant"]
+  content: str
+
+
+class ConversationRequest(BaseModel):
+  message: str
+  history: List[ConversationMessage] = Field(default_factory=list)
+  task_type: SpeakingTaskType
+  mode: SpeakingMode | None = None
+  hints: bool = False
+  session_id: str | None = None
+
+
+class ConversationResponse(BaseModel):
+  reply: str
+  audio_url: str | None = None
+
+
+class SpeakingEvaluationRequest(BaseModel):
+  history: List[ConversationMessage] = Field(default_factory=list)
+  task_type: SpeakingTaskType
+  mode: SpeakingMode | None = None
+
+
+class SpeakingEvaluationResponse(BaseModel):
+  fluency: int
+  grammar: int
+  vocabulary: int
+  interaction: int
+  feedback: List[str]
+  improved_response: str
+

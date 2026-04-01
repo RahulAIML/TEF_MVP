@@ -147,6 +147,26 @@ def _generate_json(prompt: str, temperature: float = 0.7) -> Dict[str, Any]:
   return _extract_json_payload(response.text)
 
 
+def _generate_text(prompt: str, temperature: float = 0.4) -> str:
+  _ensure_api_key()
+  genai.configure(api_key=API_KEY)
+  model = genai.GenerativeModel(MODEL_NAME)
+  try:
+    response = model.generate_content(
+      prompt,
+      generation_config=genai.types.GenerationConfig(
+        temperature=temperature,
+        response_mime_type="text/plain"
+      )
+    )
+  except Exception as error:
+    raise RuntimeError(f"Gemini generate_content failed with model '{MODEL_NAME}': {error}") from error
+
+  if not getattr(response, "text", None):
+    raise RuntimeError("Gemini returned an empty response.")
+
+  return str(response.text).strip()
+
 def _normalize_option(option: str, option_index: int) -> str:
   letters = ["A", "B", "C", "D"]
   clean = option.strip()
@@ -953,5 +973,202 @@ Rules:
   return {
     "feedback": feedback,
     "improved_version": str(payload.get("improved_version", "")).strip()
+  }
+
+
+
+
+def _format_conversation_history(history: list[dict[str, str]]) -> str:
+  if not history:
+    return "Aucun."
+  lines: list[str] = []
+  for item in history:
+    role = str(item.get("role", "user")).strip().lower()
+    content = str(item.get("content", "")).strip()
+    if not content:
+      continue
+    label = "Utilisateur" if role == "user" else "Examinateur"
+    lines.append(f"{label}: {content}")
+  return "\n".join(lines) if lines else "Aucun."
+
+
+def _generate_gemini_tts_audio_for_speaking(script: str, file_stub: str) -> str:
+  _ensure_api_key()
+  os.makedirs(AUDIO_STORAGE_PATH, exist_ok=True)
+  client = genai_client.Client(api_key=API_KEY)
+  try:
+    response = client.models.generate_content(
+      model=GEMINI_TTS_MODEL,
+      contents=script,
+      config=types.GenerateContentConfig(
+        response_modalities=["AUDIO"],
+        speech_config=types.SpeechConfig(
+          voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+              voice_name="Kore"
+            )
+          )
+        )
+      )
+    )
+  except Exception as error:
+    logger.error("Gemini TTS (speaking) request failed: %s", error)
+    raise RuntimeError(f"Gemini TTS failed with model '{GEMINI_TTS_MODEL}': {error}") from error
+
+  try:
+    inline_data = response.candidates[0].content.parts[0].inline_data
+    audio_bytes = inline_data.data
+  except Exception as error:
+    logger.error("Gemini TTS (speaking) returned no audio data: %s", error)
+    raise RuntimeError("Gemini TTS returned no audio data.") from error
+
+  buffer = io.BytesIO()
+  with wave.open(buffer, "wb") as wf:
+    wf.setnchannels(1)
+    wf.setsampwidth(2)
+    wf.setframerate(24000)
+    wf.writeframes(audio_bytes)
+  wav_bytes = buffer.getvalue()
+
+  file_name = f"{file_stub}.wav"
+  file_path = os.path.join(AUDIO_STORAGE_PATH, file_name)
+  with open(file_path, "wb") as audio_file:
+    audio_file.write(wav_bytes)
+
+  logger.info("Gemini TTS (speaking) success: bytes=%s file=%s", len(wav_bytes), file_name)
+
+  return f"/audio/{file_name}"
+
+
+def generate_speaking_audio(script: str, session_id: str | None = None) -> str:
+  if not script.strip():
+    raise RuntimeError("Cannot generate audio for empty script.")
+
+  os.makedirs(AUDIO_STORAGE_PATH, exist_ok=True)
+  file_stub = f"speaking_{session_id or 'global'}_{uuid.uuid4().hex[:8]}"
+
+  if ELEVENLABS_API_KEY and ELEVENLABS_VOICE_ID:
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{ELEVENLABS_VOICE_ID}"
+    payload = {
+      "text": script,
+      "model_id": "eleven_multilingual_v2",
+      "optimize_streaming_latency": 2
+    }
+    headers = {"xi-api-key": ELEVENLABS_API_KEY, "Content-Type": "application/json"}
+
+    logger.info(
+      "ElevenLabs TTS (speaking) request: session=%s chars=%s",
+      session_id or "global",
+      len(script)
+    )
+
+    try:
+      response = requests.post(url, headers=headers, json=payload, timeout=30)
+      response.raise_for_status()
+      file_name = f"{file_stub}.mp3"
+      file_path = os.path.join(AUDIO_STORAGE_PATH, file_name)
+      with open(file_path, "wb") as audio_file:
+        audio_file.write(response.content)
+
+      logger.info(
+        "ElevenLabs TTS (speaking) success: status=%s bytes=%s file=%s",
+        response.status_code,
+        len(response.content),
+        file_name
+      )
+
+      return f"/audio/{file_name}"
+    except requests.RequestException as error:
+      logger.warning("ElevenLabs TTS (speaking) failed: %s. Falling back to Gemini TTS.", error)
+
+  return _generate_gemini_tts_audio_for_speaking(script, file_stub)
+
+
+def generate_speaking_reply(
+  message: str,
+  history: list[dict[str, str]],
+  task_type: str,
+  session_id: str | None = None
+) -> dict[str, str]:
+  history_text = _format_conversation_history(history)
+  prompt = f"""
+You are a TEF Canada speaking examiner.
+
+Rules:
+
+- Respond in French
+- Keep responses SHORT (1–2 sentences)
+- Always ask a follow-up question
+- Be natural and conversational
+- Use B1–B2 level French
+- Do not explain grammar
+
+Task type: {task_type}
+
+Conversation history:
+{history_text}
+
+User said:
+{message}
+
+Respond like a real examiner.
+"""
+
+  reply = _generate_text(prompt, temperature=0.4)
+  audio_url = generate_speaking_audio(reply, session_id)
+  return {
+    "reply": reply,
+    "audio_url": audio_url
+  }
+
+
+def evaluate_speaking_conversation(history: list[dict[str, str]], task_type: str) -> dict[str, object]:
+  history_text = _format_conversation_history(history)
+  prompt = f"""
+You are a TEF Canada speaking examiner.
+
+Evaluate the candidate's spoken performance for task type: {task_type}.
+
+Conversation history:
+{history_text}
+
+Return JSON with:
+{{
+  "fluency": 0-10,
+  "grammar": 0-10,
+  "vocabulary": 0-10,
+  "interaction": 0-10,
+  "feedback": ["..."],
+  "improved_response": "..."
+}}
+
+Rules:
+- Use integers 0-10.
+- Provide 3-6 feedback points.
+- improved_response should be a better short response in French.
+- Output valid JSON only.
+"""
+
+  payload = _generate_json(prompt, temperature=0.3)
+
+  def _score(value: object) -> int:
+    try:
+      score = int(float(value))
+    except (TypeError, ValueError):
+      return 0
+    return max(0, min(10, score))
+
+  feedback = payload.get("feedback", [])
+  if isinstance(feedback, str):
+    feedback = [item.strip() for item in feedback.split("-") if item.strip()]
+  feedback = [str(item).strip() for item in feedback if str(item).strip()]
+
+  return {
+    "fluency": _score(payload.get("fluency")),
+    "grammar": _score(payload.get("grammar")),
+    "vocabulary": _score(payload.get("vocabulary")),
+    "interaction": _score(payload.get("interaction")),
+    "feedback": feedback,
+    "improved_response": str(payload.get("improved_response", "")).strip()
   }
 

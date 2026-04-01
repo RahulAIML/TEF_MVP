@@ -22,6 +22,11 @@ const modules = [
     href: "/listening-exam"
   },
   {
+    title: "Speaking Module",
+    description: "Interactive TEF speaking practice with real-time examiner responses.",
+    href: "/speaking"
+  },
+  {
     title: "Writing Module",
     description: "Train Task 1 and Task 2 with guided steps or a full 60-minute exam simulation.",
     href: "/writing"
