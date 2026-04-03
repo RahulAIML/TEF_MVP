@@ -1,5 +1,6 @@
 "use client";
 
+import { useCallback, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LearnExercise, LearnEvaluationResponse } from "@/types/learn";
 
@@ -26,6 +27,115 @@ const SCORE_COLOR = (score: number) => {
   return "text-rose-600";
 };
 
+// ── Inline mic hook ────────────────────────────────────────────────────────
+interface SpeechRecognitionLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: { results: { 0: { transcript: string } }[] }) => void) | null;
+  onerror: ((e: { error?: string }) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+function useMic(onTranscript: (t: string) => void) {
+  const [isListening, setIsListening] = useState(false);
+  const [micError, setMicError] = useState("");
+  const recRef = useRef<SpeechRecognitionLike | null>(null);
+
+  const toggle = useCallback(() => {
+    if (isListening) {
+      recRef.current?.stop();
+      return;
+    }
+    setMicError("");
+    const win = window as unknown as {
+      SpeechRecognition?: new () => SpeechRecognitionLike;
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+    };
+    const Ctor = win.SpeechRecognition ?? win.webkitSpeechRecognition;
+    if (!Ctor) {
+      setMicError("Speech recognition not supported in this browser.");
+      return;
+    }
+    const rec = new Ctor();
+    rec.lang = "fr-FR";
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onresult = (e) => {
+      const text = e.results[0][0].transcript.trim();
+      if (text) onTranscript(text);
+    };
+    rec.onerror = (e) => {
+      const code = e.error ?? "";
+      if (code !== "no-speech" && code !== "aborted") {
+        setMicError(code === "not-allowed" ? "Microphone access denied." : `Error: ${code}`);
+      }
+    };
+    rec.onend = () => {
+      setIsListening(false);
+      recRef.current = null;
+    };
+    recRef.current = rec;
+    setIsListening(true);
+    rec.start();
+  }, [isListening, onTranscript]);
+
+  return { isListening, micError, toggle };
+}
+
+// ── MicButton ──────────────────────────────────────────────────────────────
+function MicButton({ disabled, onTranscript, onAppend }: {
+  disabled: boolean;
+  onTranscript: (t: string) => void;
+  onAppend: (t: string) => void;
+}) {
+  const { isListening, micError, toggle } = useMic((text) => {
+    onTranscript(text);
+    onAppend(text);
+  });
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={toggle}
+        title={isListening ? "Stop recording" : "Speak your answer"}
+        className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all
+          ${isListening
+            ? "border-rose-400 bg-rose-500 text-white shadow-md"
+            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          }
+          ${disabled ? "cursor-default opacity-50" : "cursor-pointer"}`}
+      >
+        {isListening ? (
+          <>
+            <span className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-white" />
+            </span>
+            Stop Recording
+          </>
+        ) : (
+          <>
+            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4zm0 2a2 2 0 0 0-2 2v6a2 2 0 0 0 4 0V5a2 2 0 0 0-2-2zm7 8a1 1 0 0 1 1 1 8 8 0 0 1-7 7.938V21h2a1 1 0 0 1 0 2H9a1 1 0 0 1 0-2h2v-1.062A8 8 0 0 1 4 12a1 1 0 1 1 2 0 6 6 0 0 0 12 0 1 1 0 0 1 1-1z" />
+            </svg>
+            Speak Answer
+          </>
+        )}
+      </button>
+      {isListening && (
+        <p className="text-xs text-slate-500 animate-pulse">Listening in French... speak now</p>
+      )}
+      {micError && <p className="text-xs text-rose-500">{micError}</p>}
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────
 export default function ExerciseCard({
   exercise,
   index,
@@ -35,6 +145,11 @@ export default function ExerciseCard({
   isEvaluating
 }: ExerciseCardProps) {
   const isLocked = isEvaluating || evaluation !== null;
+
+  // Append spoken text to existing textarea content
+  const handleSpokenAppend = useCallback((text: string) => {
+    onAnswerChange(answer ? `${answer} ${text}` : text);
+  }, [answer, onAnswerChange]);
 
   return (
     <Card className="border-slate-200 shadow-sm">
@@ -81,19 +196,18 @@ export default function ExerciseCard({
           )}
         </div>
 
-        {/* Answer Input — always visible, locked after evaluation */}
+        {/* Answer Input */}
         {exercise.type === "mcq" && exercise.options && (
           <div className="space-y-2">
             {exercise.options.map((opt) => {
               const letter = opt.charAt(0);
-              const isSelected = answer === letter;
               return (
                 <button
                   key={opt}
                   disabled={isLocked}
                   onClick={() => onAnswerChange(letter)}
                   className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm transition-colors
-                    ${isSelected
+                    ${answer === letter
                       ? "border-slate-800 bg-slate-800 text-white"
                       : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
                     }
@@ -121,19 +235,44 @@ export default function ExerciseCard({
           />
         )}
 
-        {(exercise.type === "writing_task" || exercise.type === "speaking_prompt") && (
+        {exercise.type === "writing_task" && (
           <textarea
             disabled={isLocked}
             value={answer}
             onChange={(e) => onAnswerChange(e.target.value)}
             rows={4}
-            placeholder={
-              exercise.type === "writing_task"
-                ? "Write your response in French..."
-                : "Type what you would say in French..."
-            }
+            placeholder="Write your response in French..."
             className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60 resize-none"
           />
+        )}
+
+        {/* Speaking exercise: textarea + mic button */}
+        {exercise.type === "speaking_prompt" && (
+          <div className="space-y-3">
+            <textarea
+              disabled={isLocked}
+              value={answer}
+              onChange={(e) => onAnswerChange(e.target.value)}
+              rows={4}
+              placeholder="Speak using the mic below, or type what you would say in French..."
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60 resize-none"
+            />
+            {!isLocked && (
+              <MicButton
+                disabled={isLocked}
+                onTranscript={() => undefined}
+                onAppend={handleSpokenAppend}
+              />
+            )}
+            {answer && !isLocked && (
+              <button
+                onClick={() => onAnswerChange("")}
+                className="text-xs text-slate-400 underline hover:text-slate-600"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         )}
 
         {/* Evaluation Result */}
