@@ -296,7 +296,7 @@ export default function SpeakingPage() {
       case "processing": return "Examiner is thinking...";
       case "speaking":   return "Examiner is speaking...";
       case "listening":  return "Listening... speak now.";
-      default:           return handsFreeEnabled ? "Hands-free active — waiting." : "Ready.";
+      default:           return handsFreeEnabled ? "Hands-free active — waiting." : isSessionActive ? "Tap Start Recording to answer." : "Ready.";
     }
   }, [convState, handsFreeEnabled, mode, isExamStarted]);
 
@@ -433,11 +433,13 @@ export default function SpeakingPage() {
                   }}
                 />
 
-                {/* Recorder */}
+                {/* Recorder — in manual mode we hide its built-in button and render our own */}
                 <SpeakingRecorder
                   ref={recorderRef}
                   onTranscript={handleTranscript}
                   onError={(message) => setError(message)}
+                  hideButton={!handsFreeEnabled}
+                  manualSubmit={!handsFreeEnabled}
                   onNoSpeech={() => {
                     if (convStateRef.current === "listening") setConvState("idle");
                     // Only auto-restart in hands-free mode
@@ -451,7 +453,7 @@ export default function SpeakingPage() {
                   isDisabled={convState === "processing" || (mode === "exam" && !isExamStarted) || !!evaluation}
                 />
 
-                {/* Manual mode controls */}
+                {/* Manual mode controls — single button, shown only when session is active */}
                 {!handsFreeEnabled && isSessionActive && !evaluation && (
                   convState === "listening" ? (
                     <Button variant="secondary" onClick={stopListening}>

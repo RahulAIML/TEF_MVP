@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,13 @@ export interface SpeakingRecorderHandle {
 interface SpeakingRecorderProps {
   language?: string;
   isDisabled?: boolean;
+  /** Hide the built-in Start/Stop button (parent manages its own controls) */
+  hideButton?: boolean;
+  /**
+   * When true, transcript is buffered and only emitted when stop() is called.
+   * Use this for manual mode so the examiner never responds mid-speech.
+   */
+  manualSubmit?: boolean;
   onTranscript: (transcript: string) => void;
   onError?: (message: string) => void;
   onNoSpeech?: () => void;
@@ -22,11 +29,13 @@ interface SpeechRecognitionResultItem {
 }
 
 interface SpeechRecognitionResult {
+  isFinal: boolean;
   0: SpeechRecognitionResultItem;
 }
 
 interface SpeechRecognitionEventLike {
   results: SpeechRecognitionResult[];
+  resultIndex: number;
 }
 
 interface SpeechRecognitionErrorEventLike {
@@ -50,6 +59,8 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
   {
     language = "fr-FR",
     isDisabled = false,
+    hideButton = false,
+    manualSubmit = false,
     onTranscript,
     onError,
     onNoSpeech,
@@ -59,13 +70,21 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
 ) {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  // Buffer for manual-submit mode
+  const bufferedTranscriptRef = useRef<string>("");
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.stop();
     recognitionRef.current = null;
     setIsListening(false);
     onListeningChange?.(false);
-  }, [onListeningChange]);
+
+    // In manual mode, emit buffered transcript now that user clicked Stop
+    if (manualSubmit && bufferedTranscriptRef.current.trim()) {
+      onTranscript(bufferedTranscriptRef.current.trim());
+      bufferedTranscriptRef.current = "";
+    }
+  }, [manualSubmit, onListeningChange, onTranscript]);
 
   const startListening = useCallback(() => {
     if (isDisabled) return;
@@ -81,14 +100,31 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
       return;
     }
 
+    bufferedTranscriptRef.current = "";
+
     const recognition = new SpeechRecognitionImpl();
     recognition.lang = language;
-    recognition.continuous = false;
+    recognition.continuous = true;   // always continuous — we decide when to stop
     recognition.interimResults = false;
 
     recognition.onresult = (event) => {
-      const transcript = event.results[0][0].transcript;
-      onTranscript(transcript.trim());
+      // Collect all final results
+      let chunk = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          chunk += event.results[i][0].transcript + " ";
+        }
+      }
+      chunk = chunk.trim();
+      if (!chunk) return;
+
+      if (manualSubmit) {
+        // Buffer — don't emit until user clicks Stop
+        bufferedTranscriptRef.current = (bufferedTranscriptRef.current + " " + chunk).trim();
+      } else {
+        // Hands-free / auto mode — emit immediately
+        onTranscript(chunk);
+      }
     };
 
     recognition.onerror = (event) => {
@@ -107,23 +143,30 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
     };
 
     recognition.onend = () => {
+      // In continuous mode onend fires if browser cuts it (e.g. silence timeout).
+      // Restart automatically if we're still supposed to be listening.
+      if (recognitionRef.current) {
+        try { recognition.start(); } catch { /* already stopped */ }
+        return;
+      }
       setIsListening(false);
       onListeningChange?.(false);
-      recognitionRef.current = null;
     };
 
     recognitionRef.current = recognition;
     setIsListening(true);
     onListeningChange?.(true);
     recognition.start();
-  }, [isDisabled, language, onError, onListeningChange, onNoSpeech, onTranscript]);
+  }, [isDisabled, language, manualSubmit, onError, onListeningChange, onNoSpeech, onTranscript]);
 
   useImperativeHandle(ref, () => ({
     start: startListening,
     stop: stopListening
   }), [startListening, stopListening]);
 
-  // expose isListening so parent can read it if needed
+  if (hideButton) {
+    return null;
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -138,4 +181,3 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
 });
 
 export default SpeakingRecorder;
-
