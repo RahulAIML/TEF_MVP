@@ -65,7 +65,6 @@ export default function SpeakingPage() {
   // Derived state
   const isThinking = convState === "processing";
   const isListening = convState === "listening";
-  const isAudioPlaying = convState === "speaking";
 
   // ── VAD (Voice Activity Detection) for barge-in ──────────────────────────
   const stopVAD = useCallback(() => {

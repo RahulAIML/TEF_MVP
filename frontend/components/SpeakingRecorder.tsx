@@ -116,7 +116,7 @@ const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProp
     setIsListening(true);
     onListeningChange?.(true);
     recognition.start();
-  }, [isDisabled, language, onError, onListeningChange, onTranscript]);
+  }, [isDisabled, language, onError, onListeningChange, onNoSpeech, onTranscript]);
 
   useImperativeHandle(ref, () => ({
     start: startListening,
