@@ -1,16 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LearnExercise, LearnEvaluationResponse } from "@/types/learn";
 
 interface ExerciseCardProps {
   exercise: LearnExercise;
   index: number;
+  answer: string;
+  onAnswerChange: (answer: string) => void;
   evaluation: LearnEvaluationResponse | null;
   isEvaluating: boolean;
-  onSubmit: (answer: string) => void;
 }
 
 const EXERCISE_TITLES: Record<string, string> = {
@@ -22,30 +21,20 @@ const EXERCISE_TITLES: Record<string, string> = {
 };
 
 const SCORE_COLOR = (score: number) => {
-  if (score >= 80) return "text-emerald-600";
-  if (score >= 60) return "text-amber-600";
+  if (score >= 8) return "text-emerald-600";
+  if (score >= 6) return "text-amber-600";
   return "text-rose-600";
 };
 
 export default function ExerciseCard({
   exercise,
   index,
+  answer,
+  onAnswerChange,
   evaluation,
-  isEvaluating,
-  onSubmit
+  isEvaluating
 }: ExerciseCardProps) {
-  const [selected, setSelected] = useState("");
-  const [textAnswer, setTextAnswer] = useState("");
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = () => {
-    const answer = exercise.type === "mcq" ? selected : textAnswer;
-    if (!answer.trim()) return;
-    setSubmitted(true);
-    onSubmit(answer.trim());
-  };
-
-  const isLocked = submitted || isEvaluating || evaluation !== null;
+  const isLocked = isEvaluating || evaluation !== null;
 
   return (
     <Card className="border-slate-200 shadow-sm">
@@ -54,9 +43,12 @@ export default function ExerciseCard({
           <CardTitle className="text-base text-slate-900">
             Exercise {index + 1} — {EXERCISE_TITLES[exercise.type] ?? exercise.type}
           </CardTitle>
+          {isEvaluating && (
+            <span className="text-xs text-slate-400 animate-pulse">Evaluating...</span>
+          )}
           {evaluation && (
             <span className={`text-lg font-bold ${SCORE_COLOR(evaluation.score)}`}>
-              {evaluation.score}/100
+              {evaluation.score}/10
             </span>
           )}
         </div>
@@ -77,10 +69,10 @@ export default function ExerciseCard({
               {exercise.prompt ?? exercise.question}
             </p>
           )}
-          {exercise.hint && !submitted && (
+          {exercise.hint && !isLocked && (
             <p className="mt-1 text-xs text-slate-500">Hint: {exercise.hint}</p>
           )}
-          {exercise.hints && exercise.hints.length > 0 && !submitted && (
+          {exercise.hints && exercise.hints.length > 0 && !isLocked && (
             <ul className="mt-2 space-y-1">
               {exercise.hints.map((h, i) => (
                 <li key={i} className="text-xs text-slate-500">• {h}</li>
@@ -89,68 +81,64 @@ export default function ExerciseCard({
           )}
         </div>
 
-        {/* Answer Input */}
-        {!evaluation && (
-          <>
-            {exercise.type === "mcq" && exercise.options && (
-              <div className="space-y-2">
-                {exercise.options.map((opt) => (
-                  <button
-                    key={opt}
-                    disabled={isLocked}
-                    onClick={() => setSelected(opt.charAt(0))}
-                    className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm transition-colors
-                      ${selected === opt.charAt(0)
-                        ? "border-slate-800 bg-slate-800 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                      }
-                      ${isLocked ? "cursor-default opacity-70" : "cursor-pointer"}`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            )}
+        {/* Answer Input — always visible, locked after evaluation */}
+        {exercise.type === "mcq" && exercise.options && (
+          <div className="space-y-2">
+            {exercise.options.map((opt) => {
+              const letter = opt.charAt(0);
+              const isSelected = answer === letter;
+              return (
+                <button
+                  key={opt}
+                  disabled={isLocked}
+                  onClick={() => onAnswerChange(letter)}
+                  className={`w-full rounded-xl border px-4 py-2.5 text-left text-sm transition-colors
+                    ${isSelected
+                      ? "border-slate-800 bg-slate-800 text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    }
+                    ${isLocked ? "cursor-default opacity-70" : "cursor-pointer"}`}
+                >
+                  {opt}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-            {(exercise.type === "fill_blank" || exercise.type === "sentence_correction") && (
-              <input
-                type="text"
-                disabled={isLocked}
-                value={textAnswer}
-                onChange={(e) => setTextAnswer(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter" && !isLocked) handleSubmit(); }}
-                placeholder={exercise.type === "fill_blank" ? "Type your answer..." : "Type the corrected sentence..."}
-                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60"
-              />
-            )}
+        {(exercise.type === "fill_blank" || exercise.type === "sentence_correction") && (
+          <input
+            type="text"
+            disabled={isLocked}
+            value={answer}
+            onChange={(e) => onAnswerChange(e.target.value)}
+            placeholder={
+              exercise.type === "fill_blank"
+                ? "Type your answer..."
+                : "Type the corrected sentence..."
+            }
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60"
+          />
+        )}
 
-            {(exercise.type === "writing_task" || exercise.type === "speaking_prompt") && (
-              <textarea
-                disabled={isLocked}
-                value={textAnswer}
-                onChange={(e) => setTextAnswer(e.target.value)}
-                rows={4}
-                placeholder={exercise.type === "writing_task"
-                  ? "Write your response in French..."
-                  : "Type what you would say in French..."}
-                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60 resize-none"
-              />
-            )}
-
-            <Button
-              onClick={handleSubmit}
-              disabled={isLocked || (exercise.type === "mcq" ? !selected : !textAnswer.trim())}
-              className="w-full"
-            >
-              {isEvaluating ? "Evaluating..." : "Submit Answer"}
-            </Button>
-          </>
+        {(exercise.type === "writing_task" || exercise.type === "speaking_prompt") && (
+          <textarea
+            disabled={isLocked}
+            value={answer}
+            onChange={(e) => onAnswerChange(e.target.value)}
+            rows={4}
+            placeholder={
+              exercise.type === "writing_task"
+                ? "Write your response in French..."
+                : "Type what you would say in French..."
+            }
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-60 resize-none"
+          />
         )}
 
         {/* Evaluation Result */}
         {evaluation && (
           <div className="space-y-4 border-t border-slate-100 pt-4">
-            {/* Score bars */}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { label: "Grammar", val: evaluation.grammar },
@@ -165,13 +153,11 @@ export default function ExerciseCard({
               ))}
             </div>
 
-            {/* is_correct badge */}
             <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium
               ${evaluation.is_correct ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
               {evaluation.is_correct ? "✓ Correct" : "✗ Needs improvement"}
             </div>
 
-            {/* Feedback */}
             {evaluation.feedback.length > 0 && (
               <div>
                 <p className="text-xs font-semibold uppercase text-slate-400">Feedback</p>
@@ -183,7 +169,6 @@ export default function ExerciseCard({
               </div>
             )}
 
-            {/* Improved answer */}
             {evaluation.improved_answer && (
               <div className="rounded-xl bg-emerald-50 p-3">
                 <p className="text-xs font-semibold uppercase text-emerald-600">Model Answer</p>
@@ -191,7 +176,6 @@ export default function ExerciseCard({
               </div>
             )}
 
-            {/* Explanation */}
             {evaluation.explanation && (
               <div className="rounded-xl bg-slate-50 p-3">
                 <p className="text-xs font-semibold uppercase text-slate-400">Explanation</p>

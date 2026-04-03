@@ -1319,7 +1319,7 @@ Context: {context}
 
 Evaluate the student's answer and return this JSON:
 {{
-  "score": 75,
+  "score": 7,
   "grammar": 7,
   "vocabulary": 8,
   "structure": 7,
@@ -1335,7 +1335,7 @@ Evaluate the student's answer and return this JSON:
 }}
 
 Rules:
-- score: 0–100 overall
+- score: 0–10 overall
 - grammar/vocabulary/structure/fluency: 0–10 each
 - is_correct: true if answer is substantially correct (for mcq/fill_blank must match exactly)
 - For MCQ/fill_blank: is_correct=true only if answer matches exactly
@@ -1359,7 +1359,7 @@ Return only valid JSON."""
   feedback = [str(f).strip() for f in feedback if str(f).strip()][:4]
 
   return {
-    "score": _clamp_score(payload.get("score"), 100),
+    "score": _clamp_score(payload.get("score")),
     "grammar": _clamp_score(payload.get("grammar")),
     "vocabulary": _clamp_score(payload.get("vocabulary")),
     "structure": _clamp_score(payload.get("structure")),

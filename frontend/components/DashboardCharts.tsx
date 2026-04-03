@@ -129,7 +129,7 @@ function LearnSection({ learning }: { learning: LearnSummary }) {
       <SectionHeader
         title="AI Learning"
         subtitle="Exercise scores and recent sessions"
-        value={`Average score ${learning.average_score.toFixed(1)}/100`}
+        value={`Average score ${learning.average_score.toFixed(1)}/10`}
       />
       <div className="grid gap-6 lg:grid-cols-2">
         <Card className="rounded-2xl shadow-sm">
@@ -145,7 +145,7 @@ function LearnSection({ learning }: { learning: LearnSummary }) {
                 plugins: { legend: { display: false } },
                 scales: {
                   x: { grid: { display: false } },
-                  y: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } }
+                  y: { beginAtZero: true, max: 10, ticks: { stepSize: 2 } }
                 }
               }}
             />
@@ -165,7 +165,7 @@ function LearnSection({ learning }: { learning: LearnSummary }) {
                   </p>
                 </div>
                 <span className="text-base font-semibold text-slate-900">
-                  {s.score != null ? `${s.score.toFixed(0)}/100` : "—"}
+                  {s.score != null ? `${s.score.toFixed(1)}/10` : "—"}
                 </span>
               </div>
             ))}

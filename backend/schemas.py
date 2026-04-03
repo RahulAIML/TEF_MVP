@@ -408,11 +408,11 @@ class LearnEvaluateRequest(BaseModel):
 
 
 class LearnEvaluationResponse(BaseModel):
-  score: int
-  grammar: int
-  vocabulary: int
-  structure: int
-  fluency: int
+  score: int = Field(ge=0, le=10)
+  grammar: int = Field(ge=0, le=10)
+  vocabulary: int = Field(ge=0, le=10)
+  structure: int = Field(ge=0, le=10)
+  fluency: int = Field(ge=0, le=10)
   is_correct: bool
   feedback: List[str]
   improved_answer: str
