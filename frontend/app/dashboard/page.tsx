@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
-  BookOpen, Headphones, Mic, PenSquare, Sparkles,
+  BookOpen, Headphones, PenSquare, Sparkles,
   TrendingUp, Target, AlertTriangle, CheckCircle2,
   RefreshCw, ArrowRight
 } from "lucide-react";
@@ -226,7 +226,7 @@ export default function DashboardPage() {
                   {summary.learning.recent_sessions.length === 0 && (
                     <div className="flex gap-3 rounded-xl bg-indigo-50 p-3">
                       <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-indigo-500" />
-                      <p className="text-xs text-indigo-700">You haven't tried AI Learn yet — paste any French text to generate personalised exercises.</p>
+                      <p className="text-xs text-indigo-700">You have not tried AI Learn yet — paste any French text to generate personalised exercises.</p>
                     </div>
                   )}
                   {overview.overall >= 75 && (
