@@ -66,7 +66,7 @@ export default function SpeakingPage() {
   const isThinking = convState === "processing";
   const isListening = convState === "listening";
 
-  // ── VAD (Voice Activity Detection) for barge-in ──────────────────────────
+  // ── VAD (Voice Activity Detection) — kept for cleanup only, barge-in disabled ──
   const stopVAD = useCallback(() => {
     if (vadIntervalRef.current) {
       clearInterval(vadIntervalRef.current);
@@ -76,43 +76,12 @@ export default function SpeakingPage() {
       vadAudioCtxRef.current.close().catch(() => undefined);
       vadAudioCtxRef.current = null;
     }
-    // Keep stream alive for reuse
   }, []);
 
-  const startVAD = useCallback(async (onBargeIn: () => void) => {
-    if (vadIntervalRef.current) return; // already running
-    try {
-      if (!vadStreamRef.current) {
-        vadStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      }
-      const ctx = new AudioContext();
-      vadAudioCtxRef.current = ctx;
-      const source = ctx.createMediaStreamSource(vadStreamRef.current);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 512;
-      source.connect(analyser);
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      let highFrames = 0;
-
-      vadIntervalRef.current = setInterval(() => {
-        // Only trigger barge-in while in "speaking" state
-        if (convStateRef.current !== "speaking") { highFrames = 0; return; }
-        analyser.getByteFrequencyData(data);
-        const avg = data.reduce((a, b) => a + b, 0) / data.length;
-        if (avg > 18) {
-          highFrames++;
-        } else {
-          highFrames = 0;
-        }
-        // 3 consecutive high frames (~300ms) = user speaking
-        if (highFrames >= 3) {
-          highFrames = 0;
-          onBargeIn();
-        }
-      }, 100);
-    } catch {
-      // VAD not available (permissions not granted yet), silently skip
-    }
+  // startVAD kept as no-op to avoid removing references; barge-in is disabled
+  const startVAD = useCallback(async (_onBargeIn: () => void) => {
+    // Barge-in disabled — examiner always speaks fully without interruption
+    void _onBargeIn;
   }, []);
 
   // ── Audio controls ────────────────────────────────────────────────────────
@@ -128,12 +97,12 @@ export default function SpeakingPage() {
   // ── Listening controls ────────────────────────────────────────────────────
   const startListening = useCallback(() => {
     if (convStateRef.current === "processing") return;
+    if (convStateRef.current === "speaking") return;   // never overlap with examiner
     if (mode === "exam" && !isExamStarted) return;
     if (convStateRef.current === "listening") return;
-    if (convStateRef.current === "speaking") stopAudio();
     setConvState("listening");
     recorderRef.current?.start();
-  }, [mode, isExamStarted, stopAudio]);
+  }, [mode, isExamStarted]);
 
   const stopListening = useCallback(() => {
     recorderRef.current?.stop();
@@ -197,17 +166,12 @@ export default function SpeakingPage() {
         audioRef.current.src = audioUrl;
         audioRef.current.play().catch(() => {
           setConvState("idle");
-          if (handsFreeEnabled) window.setTimeout(() => startListening(), 400);
+          if (handsFreeEnabled) window.setTimeout(() => startListening(), 800);
         });
-        if (handsFreeEnabled) {
-          void startVAD(() => {
-            stopAudio();
-            window.setTimeout(() => startListening(), 100);
-          });
-        }
+        // No VAD barge-in — examiner speaks fully
       } else if (handsFreeEnabled) {
         setConvState("idle");
-        window.setTimeout(() => startListening(), 400);
+        window.setTimeout(() => startListening(), 800);
       } else {
         setConvState("idle");
       }
@@ -215,7 +179,7 @@ export default function SpeakingPage() {
       setError(err instanceof Error ? err.message : "Failed to start conversation.");
       setConvState("idle");
     }
-  }, [taskType, mode, hintsEnabled, handsFreeEnabled, startListening, startVAD, stopAudio]);
+  }, [taskType, mode, hintsEnabled, handsFreeEnabled, startListening]);
 
   const startSession = () => {
     resetSession();
@@ -263,6 +227,7 @@ export default function SpeakingPage() {
   // ── Transcript handler ────────────────────────────────────────────────────
   const handleTranscript = useCallback(async (text: string) => {
     if (!text) return;
+    if (userTurnCount >= MAX_EXCHANGES) return;   // cap at MAX_EXCHANGES
     if (mode === "exam" && !isExamStarted) {
       setError("Please start the exam first.");
       return;
@@ -281,6 +246,9 @@ export default function SpeakingPage() {
     const nextHistory: ConversationMessage[] = [...previousHistory, { role: "user", content: text }];
     setHistory(nextHistory);
     setConvState("processing");
+
+    // 2-second natural pause before examiner responds
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
 
     try {
       const response = await sendConversation({
@@ -303,20 +271,15 @@ export default function SpeakingPage() {
         audioRef.current.play().catch(() => {
           setConvState("idle");
           if (isLastTurn) window.setTimeout(() => void handleEvaluate(), 400);
-          else if (handsFreeEnabled) window.setTimeout(() => startListening(), 400);
+          else if (handsFreeEnabled) window.setTimeout(() => startListening(), 800);
         });
-        if (handsFreeEnabled && !isLastTurn) {
-          void startVAD(() => {
-            stopAudio();
-            window.setTimeout(() => startListening(), 100);
-          });
-        }
+        // No VAD barge-in — examiner always completes speech
       } else if (isLastTurn) {
         setConvState("idle");
         window.setTimeout(() => void handleEvaluate(), 400);
       } else if (handsFreeEnabled) {
         setConvState("idle");
-        window.setTimeout(() => startListening(), 400);
+        window.setTimeout(() => startListening(), 800);
       } else {
         setConvState("idle");
       }
@@ -325,7 +288,7 @@ export default function SpeakingPage() {
       setConvState("idle");
     }
   }, [mode, isExamStarted, userTurnCount, taskType, hintsEnabled, handsFreeEnabled,
-      stopAudio, handleEvaluate, startListening, startVAD]);
+      stopAudio, handleEvaluate, startListening]);
 
   const handleTimerExpire = () => {
     if (!isExamStarted) return;
@@ -337,7 +300,7 @@ export default function SpeakingPage() {
     if (mode === "exam" && !isExamStarted) return "Start the exam to begin.";
     switch (convState) {
       case "processing": return "Examiner is thinking...";
-      case "speaking":   return "Examiner is speaking... (say something to interrupt)";
+      case "speaking":   return "Examiner is speaking...";
       case "listening":  return "Listening... speak now.";
       default:           return handsFreeEnabled ? "Hands-free active — waiting." : "Ready.";
     }
@@ -461,7 +424,7 @@ export default function SpeakingPage() {
                       pendingEvaluateRef.current = false;
                       window.setTimeout(() => void handleEvaluate(), 400);
                     } else if (handsFreeEnabled) {
-                      window.setTimeout(() => startListening(), 400);
+                      window.setTimeout(() => startListening(), 800);
                     }
                   }}
                   onError={() => {
@@ -471,7 +434,7 @@ export default function SpeakingPage() {
                       pendingEvaluateRef.current = false;
                       window.setTimeout(() => void handleEvaluate(), 400);
                     } else if (handsFreeEnabled) {
-                      window.setTimeout(() => startListening(), 400);
+                      window.setTimeout(() => startListening(), 800);
                     }
                   }}
                 />
@@ -483,8 +446,9 @@ export default function SpeakingPage() {
                   onError={(message) => setError(message)}
                   onNoSpeech={() => {
                     if (convStateRef.current === "listening") setConvState("idle");
-                    if (handsFreeEnabled && convStateRef.current !== "processing") {
-                      window.setTimeout(() => startListening(), 600);
+                    // Only auto-restart in hands-free mode
+                    if (handsFreeEnabled && convStateRef.current !== "processing" && convStateRef.current !== "speaking") {
+                      window.setTimeout(() => startListening(), 800);
                     }
                   }}
                   onListeningChange={(listening) => {
@@ -493,11 +457,21 @@ export default function SpeakingPage() {
                   isDisabled={convState === "processing" || (mode === "exam" && !isExamStarted) || !!evaluation}
                 />
 
-                {/* Manual mode: show stop button when listening */}
-                {!handsFreeEnabled && isListening && (
-                  <Button variant="secondary" onClick={stopListening}>
-                    Stop Recording
-                  </Button>
+                {/* Manual mode controls */}
+                {!handsFreeEnabled && isSessionActive && !evaluation && (
+                  convState === "listening" ? (
+                    <Button variant="secondary" onClick={stopListening}>
+                      Stop Recording
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="default"
+                      disabled={convState === "processing" || convState === "speaking" || (mode === "exam" && !isExamStarted)}
+                      onClick={startListening}
+                    >
+                      Start Recording
+                    </Button>
+                  )
                 )}
 
                 <p className="text-sm text-slate-500">{statusLabel}</p>

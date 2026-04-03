@@ -34,7 +34,7 @@ ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID")
 GEMINI_TTS_MODEL = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
 ELEVENLABS_OUTPUT_FORMAT = os.getenv("ELEVENLABS_OUTPUT_FORMAT", "mp3_22050_32")
 ELEVENLABS_OPTIMIZE_LATENCY = int(os.getenv("ELEVENLABS_OPTIMIZE_LATENCY", "4"))
-SPEAKING_MAX_CHARS = int(os.getenv("SPEAKING_MAX_CHARS", "280"))
+SPEAKING_MAX_CHARS = int(os.getenv("SPEAKING_MAX_CHARS", "600"))
 AUDIO_STORAGE_PATH = os.getenv("AUDIO_STORAGE_PATH", os.path.join(os.path.dirname(__file__), "data", "audio"))
 
 DOMAINS = [
@@ -1124,31 +1124,33 @@ def generate_speaking_reply(
   if starter in {"", "__START__"}:
     scenario = _pick_speaking_prompt(task_type)
     prompt = f"""
-You are a TEF Canada speaking examiner.
+You are a TEF Canada speaking examiner conducting a real oral exam.
 
 Rules:
-- Respond in French
-- Keep responses SHORT (1-2 sentences)
-- Always ask a follow-up question
-- Be natural and conversational
+- Respond ONLY in French
+- Write 2-3 complete sentences (approximately 10-12 seconds of speech when read aloud)
+- ALWAYS finish every sentence completely — never cut off mid-thought
+- End with a clear follow-up question to keep the conversation flowing
+- Be warm, natural, and conversational
 - Use B1-B2 level French
 - Do not explain grammar{hints_note}
 
 Task type: {task_type}
 Scenario or topic: {scenario}
 
-Start the conversation like a real examiner. Ask the first question.
+Open the conversation naturally as a real examiner would. Ask your first question.
 """
   else:
     history_text = _format_conversation_history(history)
     prompt = f"""
-You are a TEF Canada speaking examiner.
+You are a TEF Canada speaking examiner conducting a real oral exam.
 
 Rules:
-- Respond in French
-- Keep responses SHORT (1-2 sentences)
-- Always ask a follow-up question
-- Be natural and conversational
+- Respond ONLY in French
+- Write 2-3 complete sentences (approximately 10-12 seconds of speech when read aloud)
+- ALWAYS finish every sentence completely — never cut off mid-thought
+- End with a clear follow-up question to keep the conversation flowing
+- Be warm, natural, and conversational
 - Use B1-B2 level French
 - Do not explain grammar{hints_note}
 
@@ -1160,7 +1162,7 @@ Conversation history:
 User said:
 {message}
 
-Respond like a real examiner.
+Respond naturally as a real examiner. Acknowledge what the user said, then ask your next question.
 """
 
   reply = _generate_text(prompt, temperature=0.4)
