@@ -22,6 +22,8 @@ import type {
   LearnContentResponse,
   LearnEvaluateRequest,
   LearnEvaluationResponse,
+  LearnExercise,
+  LearnMoreExercisesRequest,
   LearnSaveSessionRequest,
   LearnSessionSummary
 } from "@/types/learn";
@@ -306,6 +308,18 @@ export async function evaluateLearnAnswer(
     cache: "no-store"
   });
   return parseResponse<LearnEvaluationResponse>(res);
+}
+
+export async function generateMoreExercises(
+  payload: LearnMoreExercisesRequest
+): Promise<LearnExercise[]> {
+  const res = await fetch(`${API_BASE_URL}/learn/more-exercises`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<LearnExercise[]>(res);
 }
 
 export async function saveLearnSession(

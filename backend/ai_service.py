@@ -1309,6 +1309,18 @@ def evaluate_learn_answer(
   context: str = ""
 ) -> Dict[str, Any]:
   """Evaluate a user's answer to a learning exercise."""
+  is_speaking = exercise_type == "speaking_prompt"
+
+  speaking_extra = """
+  "tone": 7,
+  "pronunciation": 6,""" if is_speaking else ""
+
+  speaking_rules = """
+- tone: 0-10 — assess register, politeness, naturalness of expression
+- pronunciation: 0-10 — infer from transcription: missing liaisons, accents dropped,
+  common French/English interference patterns (e.g. silent letters spoken, wrong nasal vowels),
+  unnatural word stress. Note: inferred from written transcription of speech.""" if is_speaking else ""
+
   prompt = f"""You are a French language teacher evaluating a student's answer for TEF Canada preparation.
 
 Exercise type: {exercise_type}
@@ -1323,7 +1335,7 @@ Evaluate the student's answer and return this JSON:
   "grammar": 7,
   "vocabulary": 8,
   "structure": 7,
-  "fluency": 6,
+  "fluency": 6,{speaking_extra}
   "is_correct": true,
   "feedback": [
     "Specific feedback point 1",
@@ -1336,11 +1348,11 @@ Evaluate the student's answer and return this JSON:
 
 Rules:
 - score: 0–10 overall
-- grammar/vocabulary/structure/fluency: 0–10 each
+- grammar/vocabulary/structure/fluency: 0–10 each{speaking_rules}
 - is_correct: true if answer is substantially correct (for mcq/fill_blank must match exactly)
 - For MCQ/fill_blank: is_correct=true only if answer matches exactly
 - For writing/speaking: evaluate quality holistically
-- feedback: 2–4 specific, constructive points
+- feedback: 2–4 specific, constructive points (for speaking include tone and pronunciation tips)
 - improved_answer: always provide a better version in French
 - Be encouraging and educational
 Return only valid JSON."""
@@ -1358,7 +1370,7 @@ Return only valid JSON."""
     feedback = [item.strip() for item in feedback.split(".") if item.strip()]
   feedback = [str(f).strip() for f in feedback if str(f).strip()][:4]
 
-  return {
+  result: Dict[str, Any] = {
     "score": _clamp_score(payload.get("score")),
     "grammar": _clamp_score(payload.get("grammar")),
     "vocabulary": _clamp_score(payload.get("vocabulary")),
@@ -1369,6 +1381,70 @@ Return only valid JSON."""
     "improved_answer": str(payload.get("improved_answer", "")).strip(),
     "explanation": str(payload.get("explanation", "")).strip()
   }
+  if is_speaking:
+    result["tone"] = _clamp_score(payload.get("tone"))
+    result["pronunciation"] = _clamp_score(payload.get("pronunciation"))
+  return result
+
+
+def generate_more_exercises(topic: str, level: str, summary: str) -> list:
+  """Generate 5 fresh exercises on the same topic (different from previous set)."""
+  prompt = f"""You are a French language learning coach for TEF Canada B2 preparation.
+
+Generate 5 NEW practice exercises on this topic. Make them DIFFERENT from typical first-set exercises.
+
+Topic: {topic}
+Level: {level}
+Summary: {summary}
+
+Return a JSON array of exactly 5 exercise objects. Use the same structure as before:
+[
+  {{
+    "type": "mcq",
+    "question": "A new comprehension or language question in French?",
+    "options": ["A. option1", "B. option2", "C. option3", "D. option4"],
+    "correct_answer": "A",
+    "explanation": "Why this answer is correct"
+  }},
+  {{
+    "type": "fill_blank",
+    "question": "Complétez: ___ représente un aspect important de ___.",
+    "correct_answer": "The correct word(s)",
+    "hint": "Think about the theme"
+  }},
+  {{
+    "type": "sentence_correction",
+    "question": "Corrigez cette phrase:",
+    "incorrect": "A new French sentence with a grammar or vocabulary error",
+    "correct": "The corrected sentence",
+    "explanation": "What was wrong and why"
+  }},
+  {{
+    "type": "writing_task",
+    "question": "Write a short response",
+    "prompt": "Rédigez 3–4 phrases sur un aspect différent du sujet.",
+    "criteria": ["grammar", "vocabulary", "structure"],
+    "correct_answer": "A model answer in French"
+  }},
+  {{
+    "type": "speaking_prompt",
+    "question": "Speaking exercise",
+    "prompt": "Parlez pendant 1–2 minutes en français sur un angle nouveau du sujet.",
+    "hints": ["Mentionnez...", "Comparez...", "Donnez votre avis sur..."],
+    "correct_answer": "Key points to cover"
+  }}
+]
+
+Make exercises more challenging than the first set. Return only valid JSON array."""
+
+  payload = _generate_json(prompt, temperature=0.7)
+  # payload may be a list directly or wrapped in a key
+  if isinstance(payload, list):
+    return payload
+  for key in ("exercises", "items", "questions"):
+    if key in payload and isinstance(payload[key], list):
+      return payload[key]
+  return []
 
 
 def extract_text_from_image_bytes(image_bytes: bytes, mime_type: str = "image/jpeg") -> str:

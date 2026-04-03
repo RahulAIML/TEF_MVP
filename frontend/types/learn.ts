@@ -58,10 +58,18 @@ export interface LearnEvaluationResponse {
   vocabulary: number;
   structure: number;
   fluency: number;
+  tone?: number | null;           // speaking only
+  pronunciation?: number | null;  // speaking only
   is_correct: boolean;
   feedback: string[];
   improved_answer: string;
   explanation: string;
+}
+
+export interface LearnMoreExercisesRequest {
+  topic: string;
+  level: string;
+  summary: string;
 }
 
 export interface LearnSaveSessionRequest {

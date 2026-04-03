@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from ai_service import analyze_learn_content, evaluate_learn_answer, extract_text_from_image_bytes
+from ai_service import analyze_learn_content, evaluate_learn_answer, extract_text_from_image_bytes, generate_more_exercises
 from auth import get_optional_user
 from database import get_db
 from models import LearnSession, User
@@ -14,6 +14,8 @@ from schemas import (
   LearnContentResponse,
   LearnEvaluateRequest,
   LearnEvaluationResponse,
+  LearnExercise,
+  LearnMoreExercisesRequest,
   LearnSaveSessionRequest,
   LearnSessionSummary
 )
@@ -76,6 +78,27 @@ async def evaluate_answer(
     logger.error("evaluate_learn_answer failed: %s", err)
     raise HTTPException(status_code=500, detail="Evaluation failed. Please try again.")
   return LearnEvaluationResponse(**result)
+
+
+@router.post("/more-exercises", response_model=list[LearnExercise])
+async def more_exercises(
+  payload: LearnMoreExercisesRequest,
+  _user: User = Depends(get_optional_user)
+) -> list[LearnExercise]:
+  try:
+    raw = generate_more_exercises(payload.topic, payload.level, payload.summary)
+  except Exception as err:
+    logger.error("generate_more_exercises failed: %s", err)
+    raise HTTPException(status_code=500, detail="Failed to generate exercises. Please try again.")
+  exercises = []
+  for item in raw:
+    try:
+      exercises.append(LearnExercise(**item))
+    except Exception:
+      continue
+  if not exercises:
+    raise HTTPException(status_code=500, detail="No valid exercises generated.")
+  return exercises
 
 
 @router.post("/session/save", response_model=LearnSessionSummary)

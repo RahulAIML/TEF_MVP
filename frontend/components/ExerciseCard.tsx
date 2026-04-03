@@ -287,12 +287,18 @@ export default function ExerciseCard({
         {/* Evaluation Result */}
         {evaluation && (
           <div className="space-y-4 border-t border-slate-100 pt-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {[
                 { label: "Grammar", val: evaluation.grammar },
                 { label: "Vocabulary", val: evaluation.vocabulary },
                 { label: "Structure", val: evaluation.structure },
-                { label: "Fluency", val: evaluation.fluency }
+                { label: "Fluency", val: evaluation.fluency },
+                ...(evaluation.tone != null
+                  ? [{ label: "Tone", val: evaluation.tone }]
+                  : []),
+                ...(evaluation.pronunciation != null
+                  ? [{ label: "Pronunciation", val: evaluation.pronunciation }]
+                  : [])
               ].map(({ label, val }) => (
                 <div key={label} className="rounded-xl bg-slate-50 p-3 text-center">
                   <p className="text-xs uppercase text-slate-400">{label}</p>

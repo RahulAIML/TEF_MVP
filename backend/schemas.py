@@ -413,10 +413,18 @@ class LearnEvaluationResponse(BaseModel):
   vocabulary: int = Field(ge=0, le=10)
   structure: int = Field(ge=0, le=10)
   fluency: int = Field(ge=0, le=10)
+  tone: int | None = None          # speaking only
+  pronunciation: int | None = None  # speaking only
   is_correct: bool
   feedback: List[str]
   improved_answer: str
   explanation: str
+
+
+class LearnMoreExercisesRequest(BaseModel):
+  topic: str
+  level: str
+  summary: str
 
 
 class LearnSaveSessionRequest(BaseModel):

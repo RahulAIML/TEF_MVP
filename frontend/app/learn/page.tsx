@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   analyzeLearnContent,
   evaluateLearnAnswer,
+  generateMoreExercises,
   saveLearnSession,
   uploadLearnFile
 } from "@/services/api";
@@ -34,6 +35,8 @@ export default function LearnPage() {
   const [pageState, setPageState] = useState<PageState>("input");
   const [isLoading, setIsLoading] = useState(false);
   const [isEvaluatingAll, setIsEvaluatingAll] = useState(false);
+  const [isGeneratingMore, setIsGeneratingMore] = useState(false);
+  const [round, setRound] = useState(1);
   const [error, setError] = useState("");
   const [content, setContent] = useState<LearnContentResponse | null>(null);
   const [sourceType, setSourceType] = useState<LearnSourceType>("text");
@@ -149,6 +152,28 @@ export default function LearnPage() {
       });
     } catch {
       // non-critical
+    }
+  };
+
+  const handleGenerateMore = async () => {
+    if (!content) return;
+    setIsGeneratingMore(true);
+    setError("");
+    try {
+      const newExercises = await generateMoreExercises({
+        topic: content.topic,
+        level: content.level,
+        summary: content.summary
+      });
+      setExercises(newExercises.map((ex) => ({ exercise: ex, answer: "", evaluation: null, isEvaluating: false })));
+      setSessionSaved(false);
+      setRound((r) => r + 1);
+      setPageState("exercises");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate more exercises.");
+    } finally {
+      setIsGeneratingMore(false);
     }
   };
 
@@ -344,7 +369,7 @@ export default function LearnPage() {
                     ))}
                   </div>
                   <span className="text-sm text-slate-500">
-                    {exercises.filter((e) => e.answer.trim()).length}/{exercises.length} answered
+                    Round {round} · {exercises.filter((e) => e.answer.trim()).length}/{exercises.length} answered
                   </span>
                   {sessionScore && (
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
@@ -394,7 +419,9 @@ export default function LearnPage() {
                   </div>
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900">Session Complete!</h2>
-                    <p className="mt-1 text-slate-500">{content.topic} · Level {content.level}</p>
+                    <p className="mt-1 text-slate-500">
+                      {content.topic} · Level {content.level} · Round {round}
+                    </p>
                   </div>
                   <div className="inline-block rounded-2xl bg-slate-800 px-8 py-4 text-white">
                     <p className="text-sm uppercase tracking-wide opacity-70">Overall Score</p>
@@ -414,7 +441,16 @@ export default function LearnPage() {
                       ))}
                     </div>
                   )}
-                  <Button onClick={handleReset}>New Session</Button>
+                  <div className="flex flex-wrap justify-center gap-3">
+                    <Button
+                      onClick={() => void handleGenerateMore()}
+                      disabled={isGeneratingMore}
+                      className="px-6"
+                    >
+                      {isGeneratingMore ? "Generating..." : "Practice More Questions →"}
+                    </Button>
+                    <Button variant="outline" onClick={handleReset}>New Topic</Button>
+                  </div>
                 </CardContent>
               </Card>
             )}
