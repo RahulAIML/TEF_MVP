@@ -64,7 +64,6 @@ export default function SpeakingPage() {
 
   // Derived state
   const isThinking = convState === "processing";
-  const isListening = convState === "listening";
 
   // ── VAD (Voice Activity Detection) — kept for cleanup only, barge-in disabled ──
   const stopVAD = useCallback(() => {
@@ -78,11 +77,6 @@ export default function SpeakingPage() {
     }
   }, []);
 
-  // startVAD kept as no-op to avoid removing references; barge-in is disabled
-  const startVAD = useCallback(async (_onBargeIn: () => void) => {
-    // Barge-in disabled — examiner always speaks fully without interruption
-    void _onBargeIn;
-  }, []);
 
   // ── Audio controls ────────────────────────────────────────────────────────
   const stopAudio = useCallback(() => {
