@@ -4,18 +4,28 @@ import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from "
 import { Button } from "@/components/ui/button";
 
 export interface SpeakingRecorderHandle {
-  start: () => void;
+  /** Stop recognition and emit the buffered transcript (used by manual Stop button) */
   stop: () => void;
+  /** Stop recognition and DISCARD buffer — use for Reset / cleanup */
+  cancel: () => void;
+  /** Start recognition */
+  start: () => void;
 }
 
 interface SpeakingRecorderProps {
   language?: string;
   isDisabled?: boolean;
-  /** Hide the built-in Start/Stop button (parent manages its own controls) */
+  /** Hide the built-in button row (parent renders its own controls) */
   hideButton?: boolean;
   /**
-   * When true, transcript is buffered and only emitted when stop() is called.
-   * Use this for manual mode so the examiner never responds mid-speech.
+   * Hands-free auto-stop: after this many ms of silence following the last
+   * detected speech, recognition stops and the buffered transcript is emitted.
+   * Set to 0 (default) to disable.
+   */
+  silenceTimeoutMs?: number;
+  /**
+   * Manual mode: buffer transcript and only emit on explicit stop() call.
+   * Takes precedence over silenceTimeoutMs.
    */
   manualSubmit?: boolean;
   onTranscript: (transcript: string) => void;
@@ -24,13 +34,9 @@ interface SpeakingRecorderProps {
   onListeningChange?: (listening: boolean) => void;
 }
 
-interface SpeechRecognitionResultItem {
-  transcript: string;
-}
-
 interface SpeechRecognitionResult {
   isFinal: boolean;
-  0: SpeechRecognitionResultItem;
+  0: { transcript: string };
 }
 
 interface SpeechRecognitionEventLike {
@@ -38,16 +44,12 @@ interface SpeechRecognitionEventLike {
   resultIndex: number;
 }
 
-interface SpeechRecognitionErrorEventLike {
-  error?: string;
-}
-
 interface SpeechRecognitionLike {
   lang: string;
   continuous: boolean;
   interimResults: boolean;
   onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onerror: ((event: { error?: string }) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -55,129 +57,182 @@ interface SpeechRecognitionLike {
 
 type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
-const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProps>(function SpeakingRecorder(
-  {
-    language = "fr-FR",
-    isDisabled = false,
-    hideButton = false,
-    manualSubmit = false,
-    onTranscript,
-    onError,
-    onNoSpeech,
-    onListeningChange
-  },
-  ref
-) {
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  // Buffer for manual-submit mode
-  const bufferedTranscriptRef = useRef<string>("");
+const SpeakingRecorder = forwardRef<SpeakingRecorderHandle, SpeakingRecorderProps>(
+  function SpeakingRecorder(
+    {
+      language = "fr-FR",
+      isDisabled = false,
+      hideButton = false,
+      silenceTimeoutMs = 0,
+      manualSubmit = false,
+      onTranscript,
+      onError,
+      onNoSpeech,
+      onListeningChange,
+    },
+    ref
+  ) {
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+    const bufferRef = useRef<string>("");
+    const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const hasSpeechRef = useRef(false); // true once user has spoken at least one word
 
-  const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-    recognitionRef.current = null;
-    setIsListening(false);
-    onListeningChange?.(false);
+    // ── helpers ──────────────────────────────────────────────────────────────
 
-    // In manual mode, emit buffered transcript now that user clicked Stop
-    if (manualSubmit && bufferedTranscriptRef.current.trim()) {
-      onTranscript(bufferedTranscriptRef.current.trim());
-      bufferedTranscriptRef.current = "";
-    }
-  }, [manualSubmit, onListeningChange, onTranscript]);
+    const clearSilenceTimer = useCallback(() => {
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+        silenceTimerRef.current = null;
+      }
+    }, []);
 
-  const startListening = useCallback(() => {
-    if (isDisabled) return;
+    /** Internal stop — optionally emit the buffer */
+    const doStop = useCallback(
+      (emit: boolean) => {
+        clearSilenceTimer();
+        hasSpeechRef.current = false;
 
-    const speechApi = window as unknown as {
-      SpeechRecognition?: SpeechRecognitionConstructor;
-      webkitSpeechRecognition?: SpeechRecognitionConstructor;
-    };
-    const SpeechRecognitionImpl = speechApi.SpeechRecognition ?? speechApi.webkitSpeechRecognition;
+        // Null out ref first so onend doesn't auto-restart
+        const rec = recognitionRef.current;
+        recognitionRef.current = null;
+        rec?.stop();
 
-    if (!SpeechRecognitionImpl) {
-      onError?.("Speech recognition is not supported in this browser.");
-      return;
-    }
+        setIsListening(false);
+        onListeningChange?.(false);
 
-    bufferedTranscriptRef.current = "";
-
-    const recognition = new SpeechRecognitionImpl();
-    recognition.lang = language;
-    recognition.continuous = true;   // always continuous — we decide when to stop
-    recognition.interimResults = false;
-
-    recognition.onresult = (event) => {
-      // Collect all final results
-      let chunk = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) {
-          chunk += event.results[i][0].transcript + " ";
+        if (emit) {
+          const text = bufferRef.current.trim();
+          bufferRef.current = "";
+          if (text) onTranscript(text);
+        } else {
+          bufferRef.current = "";
         }
-      }
-      chunk = chunk.trim();
-      if (!chunk) return;
+      },
+      [clearSilenceTimer, onListeningChange, onTranscript]
+    );
 
-      if (manualSubmit) {
-        // Buffer — don't emit until user clicks Stop
-        bufferedTranscriptRef.current = (bufferedTranscriptRef.current + " " + chunk).trim();
-      } else {
-        // Hands-free / auto mode — emit immediately
-        onTranscript(chunk);
-      }
-    };
+    // ── Exposed handle ────────────────────────────────────────────────────────
 
-    recognition.onerror = (event) => {
-      const code = event.error ?? "";
-      if (code === "no-speech" || code === "audio-capture") {
-        onNoSpeech?.();
-        return;
-      }
-      const messages: Record<string, string> = {
-        "not-allowed": "Microphone access denied. Please allow microphone access.",
-        "network": "Network error during speech recognition.",
-        "aborted": ""
+    const stopAndEmit = useCallback(() => doStop(true), [doStop]);
+    const cancel = useCallback(() => doStop(false), [doStop]);
+
+    const startListening = useCallback(() => {
+      if (isDisabled) return;
+      if (recognitionRef.current) return; // already running
+
+      const speechApi = window as unknown as {
+        SpeechRecognition?: SpeechRecognitionConstructor;
+        webkitSpeechRecognition?: SpeechRecognitionConstructor;
       };
-      const msg = messages[code] ?? `Speech recognition error: ${code}`;
-      if (msg) onError?.(msg);
-    };
-
-    recognition.onend = () => {
-      // In continuous mode onend fires if browser cuts it (e.g. silence timeout).
-      // Restart automatically if we're still supposed to be listening.
-      if (recognitionRef.current) {
-        try { recognition.start(); } catch { /* already stopped */ }
+      const Impl = speechApi.SpeechRecognition ?? speechApi.webkitSpeechRecognition;
+      if (!Impl) {
+        onError?.("Speech recognition is not supported in this browser.");
         return;
       }
-      setIsListening(false);
-      onListeningChange?.(false);
-    };
 
-    recognitionRef.current = recognition;
-    setIsListening(true);
-    onListeningChange?.(true);
-    recognition.start();
-  }, [isDisabled, language, manualSubmit, onError, onListeningChange, onNoSpeech, onTranscript]);
+      bufferRef.current = "";
+      hasSpeechRef.current = false;
+      clearSilenceTimer();
 
-  useImperativeHandle(ref, () => ({
-    start: startListening,
-    stop: stopListening
-  }), [startListening, stopListening]);
+      const recognition = new Impl();
+      recognition.lang = language;
+      recognition.continuous = true;
+      recognition.interimResults = true; // lets us reset silence timer on interim speech
 
-  if (hideButton) {
-    return null;
+      recognition.onresult = (event) => {
+        let hasNewFinal = false;
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            bufferRef.current = (bufferRef.current + " " + result[0].transcript).trim();
+            hasNewFinal = true;
+            hasSpeechRef.current = true;
+          }
+        }
+
+        // Reset silence timer after ANY speech activity (interim or final)
+        if (hasSpeechRef.current && (silenceTimeoutMs > 0) && !manualSubmit) {
+          clearSilenceTimer();
+          if (hasNewFinal) {
+            // Schedule auto-stop after silence
+            silenceTimerRef.current = setTimeout(() => {
+              doStop(true);
+            }, silenceTimeoutMs);
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        const code = event.error ?? "";
+        if (code === "no-speech" || code === "audio-capture") {
+          onNoSpeech?.();
+          return;
+        }
+        const messages: Record<string, string> = {
+          "not-allowed": "Microphone access denied. Please allow microphone access.",
+          "network": "Network error during speech recognition.",
+          "aborted": "",
+        };
+        const msg = messages[code] ?? `Speech recognition error: ${code}`;
+        if (msg) onError?.(msg);
+      };
+
+      recognition.onend = () => {
+        // If recognitionRef is still set, the browser ended early (silence timeout) —
+        // restart to keep mic open until we explicitly stop.
+        if (recognitionRef.current) {
+          try {
+            recognition.start();
+          } catch {
+            // ignore
+          }
+          return;
+        }
+        setIsListening(false);
+        onListeningChange?.(false);
+      };
+
+      recognitionRef.current = recognition;
+      setIsListening(true);
+      onListeningChange?.(true);
+      recognition.start();
+    }, [
+      isDisabled,
+      language,
+      manualSubmit,
+      silenceTimeoutMs,
+      clearSilenceTimer,
+      doStop,
+      onError,
+      onListeningChange,
+      onNoSpeech,
+    ]);
+
+    useImperativeHandle(
+      ref,
+      () => ({ start: startListening, stop: stopAndEmit, cancel }),
+      [startListening, stopAndEmit, cancel]
+    );
+
+    // ── UI ────────────────────────────────────────────────────────────────────
+
+    if (hideButton) return null;
+
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          onClick={isListening ? stopAndEmit : startListening}
+          disabled={isDisabled}
+        >
+          {isListening ? "Stop" : "Start Recording"}
+        </Button>
+        <p className="text-sm text-slate-500">
+          {isListening ? "Listening... speak now." : "Tap to answer in French."}
+        </p>
+      </div>
+    );
   }
-
-  return (
-    <div className="flex flex-wrap items-center gap-3">
-      <Button onClick={isListening ? stopListening : startListening} disabled={isDisabled}>
-        {isListening ? "Stop" : "Start Recording"}
-      </Button>
-      <p className="text-sm text-slate-500">
-        {isListening ? "Listening... speak now." : "Tap to answer in French."}
-      </p>
-    </div>
-  );
-});
+);
 
 export default SpeakingRecorder;

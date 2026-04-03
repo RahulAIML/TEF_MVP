@@ -53,11 +53,6 @@ export default function SpeakingPage() {
   const pendingEvaluateRef = useRef(false);
   const convStateRef = useRef<ConvState>("idle");
 
-  // VAD refs
-  const vadAudioCtxRef = useRef<AudioContext | null>(null);
-  const vadStreamRef = useRef<MediaStream | null>(null);
-  const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   // Keep refs in sync
   useEffect(() => { historyRef.current = history; }, [history]);
   useEffect(() => { convStateRef.current = convState; }, [convState]);
@@ -65,17 +60,8 @@ export default function SpeakingPage() {
   // Derived state
   const isThinking = convState === "processing";
 
-  // ── VAD (Voice Activity Detection) — kept for cleanup only, barge-in disabled ──
-  const stopVAD = useCallback(() => {
-    if (vadIntervalRef.current) {
-      clearInterval(vadIntervalRef.current);
-      vadIntervalRef.current = null;
-    }
-    if (vadAudioCtxRef.current) {
-      vadAudioCtxRef.current.close().catch(() => undefined);
-      vadAudioCtxRef.current = null;
-    }
-  }, []);
+  // Stub — VAD removed; kept so resetSession / useEffect refs compile cleanly
+  const stopVAD = useCallback(() => undefined, []);
 
 
   // ── Audio controls ────────────────────────────────────────────────────────
@@ -99,7 +85,7 @@ export default function SpeakingPage() {
   }, [mode, isExamStarted]);
 
   const stopListening = useCallback(() => {
-    recorderRef.current?.stop();
+    recorderRef.current?.stop();   // emits buffered transcript (manual mode)
     if (convStateRef.current === "listening") setConvState("idle");
   }, []);
 
@@ -110,7 +96,7 @@ export default function SpeakingPage() {
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   const resetSession = useCallback(() => {
-    recorderRef.current?.stop();
+    recorderRef.current?.cancel();   // discard buffer, no emit
     stopAudio();
     stopVAD();
     pendingEvaluateRef.current = false;
@@ -125,14 +111,11 @@ export default function SpeakingPage() {
     sessionIdRef.current = null;
   }, [stopAudio, stopVAD]);
 
-  // Clean up VAD stream on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopVAD();
-      if (vadStreamRef.current) {
-        vadStreamRef.current.getTracks().forEach((t) => t.stop());
-        vadStreamRef.current = null;
-      }
+      recorderRef.current?.cancel();
     };
   }, [stopVAD]);
 
@@ -433,12 +416,15 @@ export default function SpeakingPage() {
                   }}
                 />
 
-                {/* Recorder — in manual mode we hide its built-in button and render our own */}
+                {/* Recorder
+                    - Hands-free: built-in button shown, auto-stops after 3.5 s silence
+                    - Manual: built-in button hidden, transcript buffered until Stop is tapped */}
                 <SpeakingRecorder
                   ref={recorderRef}
                   onTranscript={handleTranscript}
                   onError={(message) => setError(message)}
                   hideButton={!handsFreeEnabled}
+                  silenceTimeoutMs={handsFreeEnabled ? 3500 : 0}
                   manualSubmit={!handsFreeEnabled}
                   onNoSpeech={() => {
                     if (convStateRef.current === "listening") setConvState("idle");
