@@ -1232,4 +1232,157 @@ Rules:
   }
 
 
+# ── Learn Module ─────────────────────────────────────────────────────────────
+
+def analyze_learn_content(text: str) -> Dict[str, Any]:
+  """Analyze text and generate structured learning content with exercises."""
+  safe_text = text[:4000]
+  prompt = f"""You are a French language learning coach for TEF Canada B2 preparation.
+
+Analyze the following text and create structured learning material.
+
+TEXT:
+{safe_text}
+
+Return a JSON object with exactly this structure:
+{{
+  "topic": "concise topic name (e.g. La vie urbaine au Canada)",
+  "level": "B1",
+  "summary": "2–3 sentence English summary of the text's main ideas",
+  "key_points": ["key point 1", "key point 2", "key point 3"],
+  "vocabulary": [
+    {{"word": "French word", "definition": "English definition", "example": "French example sentence"}},
+    {{"word": "French word", "definition": "English definition", "example": "French example sentence"}},
+    {{"word": "French word", "definition": "English definition", "example": "French example sentence"}},
+    {{"word": "French word", "definition": "English definition", "example": "French example sentence"}},
+    {{"word": "French word", "definition": "English definition", "example": "French example sentence"}}
+  ],
+  "exercises": [
+    {{
+      "type": "mcq",
+      "question": "A comprehension question about the text in French?",
+      "options": ["A. option1", "B. option2", "C. option3", "D. option4"],
+      "correct_answer": "A",
+      "explanation": "Why this answer is correct"
+    }},
+    {{
+      "type": "fill_blank",
+      "question": "Complétez: ___ est une caractéristique importante de ___.",
+      "correct_answer": "The correct word(s) that fill the blank",
+      "hint": "Think about the main topic"
+    }},
+    {{
+      "type": "sentence_correction",
+      "question": "Corrigez cette phrase:",
+      "incorrect": "A French sentence with a grammar error related to the text",
+      "correct": "The corrected sentence",
+      "explanation": "What was wrong and why"
+    }},
+    {{
+      "type": "writing_task",
+      "question": "Write a short response",
+      "prompt": "Rédigez 3–4 phrases en français sur le thème principal du texte.",
+      "criteria": ["grammar", "vocabulary", "structure"],
+      "correct_answer": "A model answer in French"
+    }},
+    {{
+      "type": "speaking_prompt",
+      "question": "Speaking exercise",
+      "prompt": "Parlez pendant 1–2 minutes en français sur ce sujet.",
+      "hints": ["Mentionnez...", "Donnez un exemple de...", "Exprimez votre opinion sur..."],
+      "correct_answer": "Key points to cover"
+    }}
+  ]
+}}
+
+Generate vocabulary and exercises directly related to the text content. Target B1–B2 level.
+Return only valid JSON."""
+
+  return _generate_json(prompt, temperature=0.6)
+
+
+def evaluate_learn_answer(
+  exercise_type: str,
+  question: str,
+  correct_answer: str,
+  user_answer: str,
+  context: str = ""
+) -> Dict[str, Any]:
+  """Evaluate a user's answer to a learning exercise."""
+  prompt = f"""You are a French language teacher evaluating a student's answer for TEF Canada preparation.
+
+Exercise type: {exercise_type}
+Question: {question}
+Expected answer: {correct_answer}
+Student's answer: {user_answer}
+Context: {context}
+
+Evaluate the student's answer and return this JSON:
+{{
+  "score": 75,
+  "grammar": 7,
+  "vocabulary": 8,
+  "structure": 7,
+  "fluency": 6,
+  "is_correct": true,
+  "feedback": [
+    "Specific feedback point 1",
+    "Specific feedback point 2",
+    "Specific feedback point 3"
+  ],
+  "improved_answer": "An improved version of the student's answer in French",
+  "explanation": "Brief explanation of the correct answer"
+}}
+
+Rules:
+- score: 0–100 overall
+- grammar/vocabulary/structure/fluency: 0–10 each
+- is_correct: true if answer is substantially correct (for mcq/fill_blank must match exactly)
+- For MCQ/fill_blank: is_correct=true only if answer matches exactly
+- For writing/speaking: evaluate quality holistically
+- feedback: 2–4 specific, constructive points
+- improved_answer: always provide a better version in French
+- Be encouraging and educational
+Return only valid JSON."""
+
+  payload = _generate_json(prompt, temperature=0.4)
+
+  def _clamp_score(v: Any, max_val: int = 10) -> int:
+    try:
+      return max(0, min(max_val, int(v)))
+    except (TypeError, ValueError):
+      return 5
+
+  feedback = payload.get("feedback", [])
+  if isinstance(feedback, str):
+    feedback = [item.strip() for item in feedback.split(".") if item.strip()]
+  feedback = [str(f).strip() for f in feedback if str(f).strip()][:4]
+
+  return {
+    "score": _clamp_score(payload.get("score"), 100),
+    "grammar": _clamp_score(payload.get("grammar")),
+    "vocabulary": _clamp_score(payload.get("vocabulary")),
+    "structure": _clamp_score(payload.get("structure")),
+    "fluency": _clamp_score(payload.get("fluency")),
+    "is_correct": bool(payload.get("is_correct", False)),
+    "feedback": feedback,
+    "improved_answer": str(payload.get("improved_answer", "")).strip(),
+    "explanation": str(payload.get("explanation", "")).strip()
+  }
+
+
+def extract_text_from_image_bytes(image_bytes: bytes, mime_type: str = "image/jpeg") -> str:
+  """Use Gemini vision to extract text from an image."""
+  _ensure_api_key()
+  genai.configure(api_key=API_KEY)
+  model = genai.GenerativeModel(MODEL_NAME)
+  import google.generativeai as _genai
+  image_part = {"mime_type": mime_type, "data": image_bytes}
+  response = model.generate_content([
+    "Extract all text from this image. Return only the extracted text, no commentary.",
+    image_part
+  ])
+  return str(getattr(response, "text", "") or "").strip()
+
+
 

@@ -6,9 +6,11 @@ from sqlalchemy.orm import Session
 
 from auth import get_optional_user
 from database import get_db
-from models import ExamAttempt, ListeningAttempt, User, WritingSession
+from models import ExamAttempt, LearnSession, ListeningAttempt, User, WritingSession
 from schemas import (
   DashboardSummaryResponse,
+  LearnSessionSummary,
+  LearnSummary,
   ModuleExamSummary,
   RecentExam,
   WritingSubmissionSummary,
@@ -147,9 +149,32 @@ async def get_dashboard_summary(
     recent_submissions=submission_summaries
   )
 
+  learn_sessions = (
+    db.query(LearnSession)
+    .filter(LearnSession.user_id == user.id)
+    .order_by(LearnSession.created_at.desc())
+    .all()
+  )
+  learn_scores = [s.score for s in learn_sessions if s.score is not None]
+  learn_average = round(sum(learn_scores) / len(learn_scores), 2) if learn_scores else 0.0
+  learn_summaries: list[LearnSessionSummary] = [
+    LearnSessionSummary(
+      id=s.id,
+      topic=s.topic,
+      level=s.level,
+      score=s.score,
+      exercises_completed=s.exercises_completed,
+      exercises_total=s.exercises_total,
+      created_at=s.created_at
+    )
+    for s in learn_sessions[:3]
+  ]
+  learning_summary = LearnSummary(average_score=learn_average, recent_sessions=learn_summaries)
+
   return DashboardSummaryResponse(
     reading=reading_summary,
     listening=listening_summary,
-    writing=writing_summary
+    writing=writing_summary,
+    learning=learning_summary
   )
 

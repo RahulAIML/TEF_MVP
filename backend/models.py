@@ -57,3 +57,20 @@ class WritingSession(Base):
   created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
   updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
+
+class LearnSession(Base):
+  __tablename__ = "learn_sessions"
+
+  id = Column(Integer, primary_key=True, index=True)
+  user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=False)
+  source_type = Column(String(20), nullable=False)  # text, pdf, image, chat
+  topic = Column(String(200), nullable=True)
+  level = Column(String(10), nullable=True)
+  score = Column(Float, nullable=True)
+  grammar = Column(Float, nullable=True)
+  vocabulary = Column(Float, nullable=True)
+  structure = Column(Float, nullable=True)
+  exercises_total = Column(Integer, default=0, nullable=False)
+  exercises_completed = Column(Integer, default=0, nullable=False)
+  created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+

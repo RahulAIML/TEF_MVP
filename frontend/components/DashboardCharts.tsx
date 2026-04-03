@@ -15,7 +15,7 @@ import {
   Filler,
   type ScriptableContext
 } from "chart.js";
-import type { DashboardSummaryResponse, ModuleExamSummary } from "@/types/dashboard";
+import type { DashboardSummaryResponse, LearnSummary, ModuleExamSummary } from "@/types/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Tooltip, Legend, Filler);
@@ -104,6 +104,76 @@ function buildExamCharts(summary: ModuleExamSummary, color: string, labelPrefix:
     barDataset: buildBarDataset(labels, scoreData, color, "Score"),
     maxScore
   };
+}
+
+function LearnSection({ learning }: { learning: LearnSummary }) {
+  if (learning.recent_sessions.length === 0) {
+    return (
+      <div className="space-y-4">
+        <SectionHeader
+          title="AI Learning"
+          subtitle="Sessions from the AI Learn module"
+          value="No sessions yet"
+        />
+        <EmptyCard title="Learning Progress" />
+      </div>
+    );
+  }
+
+  const labels = [...learning.recent_sessions].reverse().map((s, i) => s.topic ?? `Session ${i + 1}`);
+  const scores = [...learning.recent_sessions].reverse().map((s) => s.score ?? 0);
+  const barDataset = buildBarDataset(labels, scores, "rgba(139,92,246,0.85)", "Score");
+
+  return (
+    <div className="space-y-4">
+      <SectionHeader
+        title="AI Learning"
+        subtitle="Exercise scores and recent sessions"
+        value={`Average score ${learning.average_score.toFixed(1)}/100`}
+      />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-slate-900">Session Scores</CardTitle>
+          </CardHeader>
+          <CardContent className={chartContainerClass}>
+            <Bar
+              data={barDataset}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  x: { grid: { display: false } },
+                  y: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } }
+                }
+              }}
+            />
+          </CardContent>
+        </Card>
+        <Card className="rounded-2xl shadow-sm">
+          <CardHeader>
+            <CardTitle className="text-slate-900">Recent Sessions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-slate-700">
+            {learning.recent_sessions.map((s) => (
+              <div key={`learn-${s.id}`} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
+                <div>
+                  <p className="font-medium text-slate-900">{s.topic ?? "Untitled"}</p>
+                  <p className="text-xs text-slate-500">
+                    {s.level ?? "—"} · {s.exercises_completed}/{s.exercises_total} exercises · {new Date(s.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <span className="text-base font-semibold text-slate-900">
+                  {s.score != null ? `${s.score.toFixed(0)}/100` : "—"}
+                </span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 }
 
 export default function DashboardCharts({ summary }: DashboardChartsProps) {
@@ -326,6 +396,8 @@ export default function DashboardCharts({ summary }: DashboardChartsProps) {
           )}
         </div>
       </div>
+
+      <LearnSection learning={summary.learning} />
     </div>
   );
 }

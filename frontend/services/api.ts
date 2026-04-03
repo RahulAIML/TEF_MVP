@@ -18,6 +18,14 @@ import type {
 import type { ExplainTextRequest, ExplainTextResponse } from "@/types/text-helper";
 import type { ConversationRequest, ConversationResponse, SpeakingEvaluationRequest, SpeakingEvaluationResponse } from "@/types/speaking";
 import type {
+  LearnAnalyzeRequest,
+  LearnContentResponse,
+  LearnEvaluateRequest,
+  LearnEvaluationResponse,
+  LearnSaveSessionRequest,
+  LearnSessionSummary
+} from "@/types/learn";
+import type {
   GenerateWritingTasksRequest,
   GenerateWritingTasksResponse,
   WritingEvaluationRequest,
@@ -262,5 +270,53 @@ export async function evaluateSpeaking(
     cache: "no-store"
   });
   return parseResponse<SpeakingEvaluationResponse>(res);
+}
+
+export async function analyzeLearnContent(
+  payload: LearnAnalyzeRequest
+): Promise<LearnContentResponse> {
+  const res = await fetch(`${API_BASE_URL}/learn/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<LearnContentResponse>(res);
+}
+
+export async function uploadLearnFile(file: File): Promise<{ text: string; source_type: string }> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/learn/upload`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: form,
+    cache: "no-store"
+  });
+  return parseResponse<{ text: string; source_type: string }>(res);
+}
+
+export async function evaluateLearnAnswer(
+  payload: LearnEvaluateRequest
+): Promise<LearnEvaluationResponse> {
+  const res = await fetch(`${API_BASE_URL}/learn/evaluate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<LearnEvaluationResponse>(res);
+}
+
+export async function saveLearnSession(
+  payload: LearnSaveSessionRequest
+): Promise<LearnSessionSummary> {
+  const res = await fetch(`${API_BASE_URL}/learn/session/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<LearnSessionSummary>(res);
 }
 

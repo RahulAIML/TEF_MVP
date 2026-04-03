@@ -7,6 +7,12 @@ import { Card, CardContent } from "@/components/ui/card";
 
 const modules = [
   {
+    title: "AI Learn",
+    description: "Paste text, upload a PDF or image — AI generates exercises and evaluates your answers.",
+    href: "/learn",
+    highlight: true
+  },
+  {
     title: "Reading Mock Exam",
     description: "Simulate the full TEF reading exam with 40 questions and a 60-minute timer.",
     href: "/mock-exam"
@@ -44,13 +50,24 @@ export default function HomePage() {
       <div className="space-y-6">
         <div className="grid gap-6 md:grid-cols-3">
           {modules.map((module) => (
-            <Card key={module.title} className="border-slate-200 shadow-sm">
+            <Card
+              key={module.title}
+              className={`border-slate-200 shadow-sm ${
+                "highlight" in module && module.highlight
+                  ? "border-slate-800 bg-slate-800 text-white"
+                  : ""
+              }`}
+            >
               <CardContent className="p-6">
-                <h3 className="text-lg font-semibold text-slate-900">{module.title}</h3>
-                <p className="mt-2 text-sm text-slate-600">{module.description}</p>
+                <h3 className={`text-lg font-semibold ${"highlight" in module && module.highlight ? "text-white" : "text-slate-900"}`}>
+                  {module.title}
+                </h3>
+                <p className={`mt-2 text-sm ${"highlight" in module && module.highlight ? "text-slate-300" : "text-slate-600"}`}>
+                  {module.description}
+                </p>
                 <Link
                   href={module.href}
-                  className="mt-4 inline-flex text-sm font-medium text-slate-900 underline"
+                  className={`mt-4 inline-flex text-sm font-medium underline ${"highlight" in module && module.highlight ? "text-white" : "text-slate-900"}`}
                 >
                   Open module
                 </Link>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -20,6 +20,9 @@ const EXAM_DURATION_SECONDS = 15 * 60;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const MAX_EXCHANGES = 5;
 
+// ── Conversation states ────────────────────────────────────────────────────
+type ConvState = "idle" | "listening" | "processing" | "speaking";
+
 const initialHints = [
   "Answer in 1–2 sentences.",
   "Use simple connectors (par exemple: d'abord, ensuite).",
@@ -32,7 +35,7 @@ export default function SpeakingPage() {
   const [taskType, setTaskType] = useState<SpeakingTaskType>("role_play");
   const [history, setHistory] = useState<ConversationMessage[]>([]);
   const [transcript, setTranscript] = useState("");
-  const [isThinking, setIsThinking] = useState(false);
+  const [convState, setConvState] = useState<ConvState>("idle");
   const [error, setError] = useState("");
   const [evaluation, setEvaluation] = useState<SpeakingEvaluationResponse | null>(null);
   const [timerKey, setTimerKey] = useState(0);
@@ -40,76 +43,143 @@ export default function SpeakingPage() {
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [hintsEnabled, setHintsEnabled] = useState(true);
   const [handsFreeEnabled, setHandsFreeEnabled] = useState(true);
-  const [isListening, setIsListening] = useState(false);
-  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
   const [userTurnCount, setUserTurnCount] = useState(0);
 
+  // Refs
   const historyRef = useRef<ConversationMessage[]>([]);
   const sessionIdRef = useRef<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const recorderRef = useRef<SpeakingRecorderHandle | null>(null);
   const pendingEvaluateRef = useRef(false);
+  const convStateRef = useRef<ConvState>("idle");
 
-  useEffect(() => {
-    historyRef.current = history;
-  }, [history]);
+  // VAD refs
+  const vadAudioCtxRef = useRef<AudioContext | null>(null);
+  const vadStreamRef = useRef<MediaStream | null>(null);
+  const vadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const buildSessionId = () => {
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-      return crypto.randomUUID();
+  // Keep refs in sync
+  useEffect(() => { historyRef.current = history; }, [history]);
+  useEffect(() => { convStateRef.current = convState; }, [convState]);
+
+  // Derived state
+  const isThinking = convState === "processing";
+  const isListening = convState === "listening";
+  const isAudioPlaying = convState === "speaking";
+
+  // ── VAD (Voice Activity Detection) for barge-in ──────────────────────────
+  const stopVAD = useCallback(() => {
+    if (vadIntervalRef.current) {
+      clearInterval(vadIntervalRef.current);
+      vadIntervalRef.current = null;
     }
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  };
+    if (vadAudioCtxRef.current) {
+      vadAudioCtxRef.current.close().catch(() => undefined);
+      vadAudioCtxRef.current = null;
+    }
+    // Keep stream alive for reuse
+  }, []);
 
+  const startVAD = useCallback(async (onBargeIn: () => void) => {
+    if (vadIntervalRef.current) return; // already running
+    try {
+      if (!vadStreamRef.current) {
+        vadStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      }
+      const ctx = new AudioContext();
+      vadAudioCtxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(vadStreamRef.current);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 512;
+      source.connect(analyser);
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      let highFrames = 0;
+
+      vadIntervalRef.current = setInterval(() => {
+        // Only trigger barge-in while in "speaking" state
+        if (convStateRef.current !== "speaking") { highFrames = 0; return; }
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        if (avg > 18) {
+          highFrames++;
+        } else {
+          highFrames = 0;
+        }
+        // 3 consecutive high frames (~300ms) = user speaking
+        if (highFrames >= 3) {
+          highFrames = 0;
+          onBargeIn();
+        }
+      }, 100);
+    } catch {
+      // VAD not available (permissions not granted yet), silently skip
+    }
+  }, []);
+
+  // ── Audio controls ────────────────────────────────────────────────────────
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current.src = "";
     }
-    setIsAudioPlaying(false);
+    stopVAD();
+  }, [stopVAD]);
+
+  // ── Listening controls ────────────────────────────────────────────────────
+  const startListening = useCallback(() => {
+    if (convStateRef.current === "processing") return;
+    if (mode === "exam" && !isExamStarted) return;
+    if (convStateRef.current === "listening") return;
+    if (convStateRef.current === "speaking") stopAudio();
+    setConvState("listening");
+    recorderRef.current?.start();
+  }, [mode, isExamStarted, stopAudio]);
+
+  const stopListening = useCallback(() => {
+    recorderRef.current?.stop();
+    if (convStateRef.current === "listening") setConvState("idle");
   }, []);
+
+  // ── Session management ────────────────────────────────────────────────────
+  const buildSessionId = () =>
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   const resetSession = useCallback(() => {
     recorderRef.current?.stop();
     stopAudio();
+    stopVAD();
     pendingEvaluateRef.current = false;
     setHistory([]);
     setTranscript("");
     setEvaluation(null);
     setError("");
-    setIsThinking(false);
+    setConvState("idle");
     setTimerActive(false);
     setIsExamStarted(false);
     setUserTurnCount(0);
     sessionIdRef.current = null;
-  }, [stopAudio]);
+  }, [stopAudio, stopVAD]);
 
-  const startListening = useCallback(() => {
-    if (isThinking) return;
-    if (mode === "exam" && !isExamStarted) return;
-    if (isListening) return;
-    if (isAudioPlaying) {
-      stopAudio();
-    }
-    recorderRef.current?.start();
-  }, [isThinking, mode, isExamStarted, isListening, isAudioPlaying, stopAudio]);
+  // Clean up VAD stream on unmount
+  useEffect(() => {
+    return () => {
+      stopVAD();
+      if (vadStreamRef.current) {
+        vadStreamRef.current.getTracks().forEach((t) => t.stop());
+        vadStreamRef.current = null;
+      }
+    };
+  }, [stopVAD]);
 
-  const startSession = () => {
-    resetSession();
-    sessionIdRef.current = buildSessionId();
-    if (mode === "exam") {
-      setTimerKey((prev) => prev + 1);
-      setTimerActive(true);
-      setIsExamStarted(true);
-    }
-    window.setTimeout(() => startExaminer(), 400);
-  };
-
-  const startExaminer = async () => {
+  // ── Examiner start ────────────────────────────────────────────────────────
+  const startExaminer = useCallback(async () => {
     setError("");
     setEvaluation(null);
     setTranscript("");
-    setIsThinking(true);
+    setConvState("processing");
     try {
       const response = await sendConversation({
         message: "__START__",
@@ -119,100 +189,61 @@ export default function SpeakingPage() {
         hints: mode === "practice" && hintsEnabled,
         session_id: sessionIdRef.current ?? undefined
       });
-      const assistantMessage: ConversationMessage = {
-        role: "assistant",
-        content: response.reply
-      };
+      const assistantMessage: ConversationMessage = { role: "assistant", content: response.reply };
       setHistory([assistantMessage]);
-      const audio = buildAudioUrl(response.audio_url);
-      if (audio && audioRef.current) {
-        audioRef.current.src = audio;
-        const playPromise = audioRef.current.play();
-        if (playPromise) {
-          playPromise.catch(() => undefined);
+
+      const audioUrl = buildAudioUrl(response.audio_url);
+      if (audioUrl && audioRef.current) {
+        setConvState("speaking");
+        audioRef.current.src = audioUrl;
+        audioRef.current.play().catch(() => {
+          setConvState("idle");
+          if (handsFreeEnabled) window.setTimeout(() => startListening(), 400);
+        });
+        if (handsFreeEnabled) {
+          void startVAD(() => {
+            stopAudio();
+            window.setTimeout(() => startListening(), 100);
+          });
         }
       } else if (handsFreeEnabled) {
+        setConvState("idle");
         window.setTimeout(() => startListening(), 400);
+      } else {
+        setConvState("idle");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start conversation.");
-    } finally {
-      setIsThinking(false);
+      setConvState("idle");
     }
+  }, [taskType, mode, hintsEnabled, handsFreeEnabled, startListening, startVAD, stopAudio]);
+
+  const startSession = () => {
+    resetSession();
+    sessionIdRef.current = buildSessionId();
+    if (mode === "exam") {
+      setTimerKey((prev) => prev + 1);
+      setTimerActive(true);
+      setIsExamStarted(true);
+    }
+    window.setTimeout(() => void startExaminer(), 400);
   };
 
+  // ── Build audio URL ───────────────────────────────────────────────────────
   const buildAudioUrl = (audioUrl?: string | null) => {
     if (!audioUrl) return null;
     if (audioUrl.startsWith("http")) return audioUrl;
     return `${API_BASE_URL}${audioUrl}`;
   };
 
-  const handleTranscript = async (text: string) => {
-    if (!text) return;
-    if (mode === "exam" && !isExamStarted) {
-      setError("Please start the exam first.");
-      return;
-    }
-
-    setError("");
-    setTranscript(text);
-    setEvaluation(null);
-    if (isAudioPlaying) {
-      stopAudio();
-    }
-
-    const nextTurnCount = userTurnCount + 1;
-    setUserTurnCount(nextTurnCount);
-    const isLastTurn = nextTurnCount >= MAX_EXCHANGES;
-
-    const previousHistory = historyRef.current;
-    const nextHistory: ConversationMessage[] = [...previousHistory, { role: "user", content: text }];
-    setHistory(nextHistory);
-    setIsThinking(true);
-
-    try {
-      const response = await sendConversation({
-        message: text,
-        history: previousHistory,
-        task_type: taskType,
-        mode,
-        hints: mode === "practice" && hintsEnabled,
-        session_id: sessionIdRef.current ?? undefined
-      });
-
-      const assistantMessage: ConversationMessage = {
-        role: "assistant",
-        content: response.reply
-      };
-      setHistory((prev) => [...prev, assistantMessage]);
-      const audio = buildAudioUrl(response.audio_url);
-      if (audio && audioRef.current) {
-        // If last turn: let audio play, then evaluate when it ends
-        if (isLastTurn) pendingEvaluateRef.current = true;
-        audioRef.current.src = audio;
-        const playPromise = audioRef.current.play();
-        if (playPromise) {
-          playPromise.catch(() => undefined);
-        }
-      } else if (isLastTurn) {
-        window.setTimeout(() => void handleEvaluate(), 400);
-      } else if (handsFreeEnabled) {
-        window.setTimeout(() => startListening(), 400);
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to get examiner response.");
-    } finally {
-      setIsThinking(false);
-    }
-  };
-
-  const handleEvaluate = async () => {
+  // ── Evaluate ──────────────────────────────────────────────────────────────
+  const handleEvaluate = useCallback(async () => {
     if (historyRef.current.length === 0) {
       setError("No conversation to evaluate yet.");
       return;
     }
     setError("");
-    setIsThinking(true);
+    setConvState("processing");
     recorderRef.current?.stop();
     stopAudio();
     try {
@@ -226,117 +257,168 @@ export default function SpeakingPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to evaluate speaking.");
     } finally {
-      setIsThinking(false);
+      setConvState("idle");
     }
-  };
+  }, [taskType, mode, stopAudio]);
+
+  // ── Transcript handler ────────────────────────────────────────────────────
+  const handleTranscript = useCallback(async (text: string) => {
+    if (!text) return;
+    if (mode === "exam" && !isExamStarted) {
+      setError("Please start the exam first.");
+      return;
+    }
+
+    setError("");
+    setTranscript(text);
+    setEvaluation(null);
+    stopAudio();
+
+    const nextTurnCount = userTurnCount + 1;
+    setUserTurnCount(nextTurnCount);
+    const isLastTurn = nextTurnCount >= MAX_EXCHANGES;
+
+    const previousHistory = historyRef.current;
+    const nextHistory: ConversationMessage[] = [...previousHistory, { role: "user", content: text }];
+    setHistory(nextHistory);
+    setConvState("processing");
+
+    try {
+      const response = await sendConversation({
+        message: text,
+        history: previousHistory,
+        task_type: taskType,
+        mode,
+        hints: mode === "practice" && hintsEnabled,
+        session_id: sessionIdRef.current ?? undefined
+      });
+
+      const assistantMessage: ConversationMessage = { role: "assistant", content: response.reply };
+      setHistory((prev) => [...prev, assistantMessage]);
+
+      const audioUrl = buildAudioUrl(response.audio_url);
+      if (audioUrl && audioRef.current) {
+        if (isLastTurn) pendingEvaluateRef.current = true;
+        setConvState("speaking");
+        audioRef.current.src = audioUrl;
+        audioRef.current.play().catch(() => {
+          setConvState("idle");
+          if (isLastTurn) window.setTimeout(() => void handleEvaluate(), 400);
+          else if (handsFreeEnabled) window.setTimeout(() => startListening(), 400);
+        });
+        if (handsFreeEnabled && !isLastTurn) {
+          void startVAD(() => {
+            stopAudio();
+            window.setTimeout(() => startListening(), 100);
+          });
+        }
+      } else if (isLastTurn) {
+        setConvState("idle");
+        window.setTimeout(() => void handleEvaluate(), 400);
+      } else if (handsFreeEnabled) {
+        setConvState("idle");
+        window.setTimeout(() => startListening(), 400);
+      } else {
+        setConvState("idle");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to get examiner response.");
+      setConvState("idle");
+    }
+  }, [mode, isExamStarted, userTurnCount, taskType, hintsEnabled, handsFreeEnabled,
+      stopAudio, handleEvaluate, startListening, startVAD]);
 
   const handleTimerExpire = () => {
     if (!isExamStarted) return;
     void handleEvaluate();
   };
 
+  // ── Status label ──────────────────────────────────────────────────────────
   const statusLabel = useMemo(() => {
     if (mode === "exam" && !isExamStarted) return "Start the exam to begin.";
-    if (isThinking) return "Examiner is thinking...";
-    if (isAudioPlaying) return "Examiner is speaking...";
-    if (isListening) return "Listening...";
-    return handsFreeEnabled ? "Hands-free active." : "Ready.";
-  }, [isThinking, isAudioPlaying, isListening, handsFreeEnabled, mode, isExamStarted]);
+    switch (convState) {
+      case "processing": return "Examiner is thinking...";
+      case "speaking":   return "Examiner is speaking... (say something to interrupt)";
+      case "listening":  return "Listening... speak now.";
+      default:           return handsFreeEnabled ? "Hands-free active — waiting." : "Ready.";
+    }
+  }, [convState, handsFreeEnabled, mode, isExamStarted]);
 
   const taskLabel = useMemo(
     () => (taskType === "role_play" ? "Task 1: Role-play" : "Task 2: Opinion discussion"),
     [taskType]
   );
 
-  const isSessionActive = history.length > 0 || isThinking;
+  const isSessionActive = history.length > 0 || convState !== "idle";
+
+  const stateIndicatorColor: Record<ConvState, string> = {
+    idle:       "bg-slate-300",
+    listening:  "bg-emerald-500 animate-pulse",
+    processing: "bg-amber-400 animate-pulse",
+    speaking:   "bg-indigo-500 animate-pulse"
+  };
 
   return (
     <AppShell title="Speaking Module" subtitle="Real-time TEF Canada speaking practice">
       <div className="space-y-6">
+        {/* Mode buttons */}
         <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant={mode === "practice" ? "default" : "outline"}
-            disabled={isSessionActive}
-            onClick={() => {
-              setMode("practice");
-              resetSession();
-            }}
-          >
+          <Button variant={mode === "practice" ? "default" : "outline"} disabled={isSessionActive}
+            onClick={() => { setMode("practice"); resetSession(); }}>
             Practice Mode
           </Button>
-          <Button
-            variant={mode === "exam" ? "default" : "outline"}
-            disabled={isSessionActive}
-            onClick={() => {
-              setMode("exam");
-              resetSession();
-            }}
-          >
+          <Button variant={mode === "exam" ? "default" : "outline"} disabled={isSessionActive}
+            onClick={() => { setMode("exam"); resetSession(); }}>
             Exam Mode
           </Button>
           <div className="ml-auto flex items-center gap-2">
             {mode === "exam" && (
-              <TimerClock
-                durationSeconds={EXAM_DURATION_SECONDS}
-                isActive={timerActive}
-                resetKey={timerKey}
-                onExpire={handleTimerExpire}
-              />
+              <TimerClock durationSeconds={EXAM_DURATION_SECONDS} isActive={timerActive}
+                resetKey={timerKey} onExpire={handleTimerExpire} />
             )}
           </div>
         </div>
 
+        {/* Task + settings row */}
         <div className="flex flex-wrap gap-3">
-          <Button
-            variant={taskType === "role_play" ? "default" : "outline"}
-            disabled={isSessionActive}
-            onClick={() => setTaskType("role_play")}
-          >
+          <Button variant={taskType === "role_play" ? "default" : "outline"} disabled={isSessionActive}
+            onClick={() => setTaskType("role_play")}>
             Role Play (Task 1)
           </Button>
-          <Button
-            variant={taskType === "opinion" ? "default" : "outline"}
-            disabled={isSessionActive}
-            onClick={() => setTaskType("opinion")}
-          >
+          <Button variant={taskType === "opinion" ? "default" : "outline"} disabled={isSessionActive}
+            onClick={() => setTaskType("opinion")}>
             Opinion (Task 2)
           </Button>
-          <Button variant="secondary" onClick={resetSession}>
-            Reset Conversation
-          </Button>
-          <Button
-            variant={handsFreeEnabled ? "default" : "outline"}
-            onClick={() => setHandsFreeEnabled((prev) => !prev)}
-          >
+          <Button variant="secondary" onClick={resetSession}>Reset</Button>
+          <Button variant={handsFreeEnabled ? "default" : "outline"}
+            onClick={() => setHandsFreeEnabled((prev) => !prev)}>
             Hands-Free {handsFreeEnabled ? "On" : "Off"}
           </Button>
         </div>
 
+        {/* Start cards */}
         {mode === "exam" && !isExamStarted && (
           <Card className="border-slate-200 shadow-sm">
             <CardContent className="space-y-3 p-6">
               <h3 className="text-lg font-semibold text-slate-900">Exam Mode</h3>
               <p className="text-sm text-slate-600">
-                You have 15 minutes to complete a speaking conversation. Press start to begin.
+                You have 15 minutes. The examiner speaks first — respond naturally.
               </p>
               <Button onClick={startSession}>Start Exam</Button>
             </CardContent>
           </Card>
         )}
 
-        {mode === "practice" && (
+        {mode === "practice" && !isSessionActive && (
           <Card className="border-slate-200 shadow-sm">
             <CardContent className="space-y-3 p-6">
               <h3 className="text-lg font-semibold text-slate-900">Practice Mode</h3>
               <p className="text-sm text-slate-600">
-                Guided practice with optional hints. Speak and the examiner responds with follow-up questions.
+                The examiner starts first. Respond naturally and the conversation will flow.
               </p>
-              <div className="flex flex-wrap items-center gap-3">
+              <div className="flex flex-wrap gap-3">
                 <Button onClick={startSession}>Start Practice</Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => setHintsEnabled((prev) => !prev)}
-                >
+                <Button variant="secondary" onClick={() => setHintsEnabled((prev) => !prev)}>
                   Hints: {hintsEnabled ? "On" : "Off"}
                 </Button>
               </div>
@@ -350,44 +432,75 @@ export default function SpeakingPage() {
           </div>
         )}
 
+        {/* Main layout */}
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-4">
+            {/* Recorder + status card */}
             <Card className="border-slate-200 shadow-sm">
-              <CardContent className="space-y-3 p-6">
+              <CardContent className="space-y-4 p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase text-slate-400">Active Task</p>
                     <h2 className="text-lg font-semibold text-slate-900">{taskLabel}</h2>
                   </div>
-                  <audio
-                    ref={audioRef}
-                    controls
-                    className="w-44"
-                    onPlay={() => setIsAudioPlaying(true)}
-                    onPause={() => setIsAudioPlaying(false)}
-                    onEnded={() => {
-                      setIsAudioPlaying(false);
-                      if (pendingEvaluateRef.current) {
-                        pendingEvaluateRef.current = false;
-                        window.setTimeout(() => void handleEvaluate(), 400);
-                      } else if (handsFreeEnabled) {
-                        window.setTimeout(() => startListening(), 400);
-                      }
-                    }}
-                  />
+                  {/* State indicator dot */}
+                  <div className="flex items-center gap-2">
+                    <span className={`h-3 w-3 rounded-full ${stateIndicatorColor[convState]}`} />
+                    <span className="text-xs text-slate-500 capitalize">{convState}</span>
+                  </div>
                 </div>
+
+                {/* Audio element (hidden controls, managed programmatically) */}
+                <audio
+                  ref={audioRef}
+                  className="hidden"
+                  onPlay={() => setConvState("speaking")}
+                  onEnded={() => {
+                    stopVAD();
+                    setConvState("idle");
+                    if (pendingEvaluateRef.current) {
+                      pendingEvaluateRef.current = false;
+                      window.setTimeout(() => void handleEvaluate(), 400);
+                    } else if (handsFreeEnabled) {
+                      window.setTimeout(() => startListening(), 400);
+                    }
+                  }}
+                  onError={() => {
+                    stopVAD();
+                    setConvState("idle");
+                    if (pendingEvaluateRef.current) {
+                      pendingEvaluateRef.current = false;
+                      window.setTimeout(() => void handleEvaluate(), 400);
+                    } else if (handsFreeEnabled) {
+                      window.setTimeout(() => startListening(), 400);
+                    }
+                  }}
+                />
+
+                {/* Recorder */}
                 <SpeakingRecorder
                   ref={recorderRef}
                   onTranscript={handleTranscript}
                   onError={(message) => setError(message)}
                   onNoSpeech={() => {
-                    if (handsFreeEnabled && !isThinking) {
+                    if (convStateRef.current === "listening") setConvState("idle");
+                    if (handsFreeEnabled && convStateRef.current !== "processing") {
                       window.setTimeout(() => startListening(), 600);
                     }
                   }}
-                  onListeningChange={setIsListening}
-                  isDisabled={isThinking || (mode === "exam" && !isExamStarted) || !!evaluation}
+                  onListeningChange={(listening) => {
+                    if (!listening && convStateRef.current === "listening") setConvState("idle");
+                  }}
+                  isDisabled={convState === "processing" || (mode === "exam" && !isExamStarted) || !!evaluation}
                 />
+
+                {/* Manual mode: show stop button when listening */}
+                {!handsFreeEnabled && isListening && (
+                  <Button variant="secondary" onClick={stopListening}>
+                    Stop Recording
+                  </Button>
+                )}
+
                 <p className="text-sm text-slate-500">{statusLabel}</p>
               </CardContent>
             </Card>
@@ -401,17 +514,14 @@ export default function SpeakingPage() {
             />
           </div>
 
+          {/* Right panel */}
           <div className="space-y-4">
             {mode === "practice" && hintsEnabled && (
               <Card className="border-slate-200 shadow-sm">
-                <CardHeader>
-                  <CardTitle>Hints</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Hints</CardTitle></CardHeader>
                 <CardContent className="space-y-2 text-sm text-slate-600">
                   {initialHints.map((hint) => (
-                    <p key={hint} className="rounded-lg bg-slate-50 px-3 py-2">
-                      {hint}
-                    </p>
+                    <p key={hint} className="rounded-lg bg-slate-50 px-3 py-2">{hint}</p>
                   ))}
                 </CardContent>
               </Card>
@@ -419,11 +529,12 @@ export default function SpeakingPage() {
 
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="space-y-3 p-6">
-                <Button onClick={handleEvaluate} disabled={isThinking}>
-                  {isThinking ? "Evaluating..." : "End & Evaluate"}
+                <Button onClick={() => void handleEvaluate()}
+                  disabled={convState === "processing" || history.length === 0}>
+                  {convState === "processing" ? "Evaluating..." : "End & Evaluate"}
                 </Button>
                 <p className="text-sm text-slate-500">
-                  Use this after a few exchanges to get feedback on fluency, grammar, and interaction.
+                  End the conversation and get feedback on fluency, grammar, and interaction.
                 </p>
               </CardContent>
             </Card>
@@ -433,22 +544,17 @@ export default function SpeakingPage() {
                 <CardContent className="space-y-3 p-6 text-sm text-slate-700">
                   <h3 className="text-base font-semibold text-slate-900">Evaluation</h3>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs uppercase text-slate-400">Fluency</p>
-                      <p className="text-lg font-semibold text-slate-900">{evaluation.fluency}/10</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs uppercase text-slate-400">Grammar</p>
-                      <p className="text-lg font-semibold text-slate-900">{evaluation.grammar}/10</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs uppercase text-slate-400">Vocabulary</p>
-                      <p className="text-lg font-semibold text-slate-900">{evaluation.vocabulary}/10</p>
-                    </div>
-                    <div className="rounded-xl bg-slate-50 p-3">
-                      <p className="text-xs uppercase text-slate-400">Interaction</p>
-                      <p className="text-lg font-semibold text-slate-900">{evaluation.interaction}/10</p>
-                    </div>
+                    {[
+                      { label: "Fluency", val: evaluation.fluency },
+                      { label: "Grammar", val: evaluation.grammar },
+                      { label: "Vocabulary", val: evaluation.vocabulary },
+                      { label: "Interaction", val: evaluation.interaction }
+                    ].map(({ label, val }) => (
+                      <div key={label} className="rounded-xl bg-slate-50 p-3">
+                        <p className="text-xs uppercase text-slate-400">{label}</p>
+                        <p className="text-lg font-semibold text-slate-900">{val}/10</p>
+                      </div>
+                    ))}
                   </div>
                   <div>
                     <p className="font-semibold text-slate-900">Feedback</p>
@@ -473,5 +579,3 @@ export default function SpeakingPage() {
     </AppShell>
   );
 }
-
-

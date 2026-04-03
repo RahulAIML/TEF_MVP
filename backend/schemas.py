@@ -232,10 +232,26 @@ class WritingSummary(BaseModel):
   recent_submissions: List[WritingSubmissionSummary]
 
 
+class LearnSessionSummary(BaseModel):
+  id: int
+  topic: str | None = None
+  level: str | None = None
+  score: float | None = None
+  exercises_completed: int
+  exercises_total: int
+  created_at: datetime
+
+
+class LearnSummary(BaseModel):
+  average_score: float
+  recent_sessions: List[LearnSessionSummary]
+
+
 class DashboardSummaryResponse(BaseModel):
   reading: ModuleExamSummary
   listening: ModuleExamSummary
   writing: WritingSummary
+  learning: LearnSummary
 
 
 WritingTaskType = Literal["task1", "task2"]
@@ -341,4 +357,76 @@ class SpeakingEvaluationResponse(BaseModel):
   interaction: int
   feedback: List[str]
   improved_response: str
+
+
+# ── Learn Module ────────────────────────────────────────────────────────────
+
+LearnSourceType = Literal["text", "pdf", "image", "chat"]
+LearnExerciseType = Literal["mcq", "fill_blank", "sentence_correction", "writing_task", "speaking_prompt"]
+
+
+class LearnVocabItem(BaseModel):
+  word: str
+  definition: str
+  example: str
+
+
+class LearnExercise(BaseModel):
+  type: LearnExerciseType
+  question: str
+  options: List[str] | None = None
+  correct_answer: str | None = None
+  hint: str | None = None
+  explanation: str | None = None
+  incorrect: str | None = None
+  correct: str | None = None
+  prompt: str | None = None
+  hints: List[str] | None = None
+  criteria: List[str] | None = None
+
+
+class LearnAnalyzeRequest(BaseModel):
+  text: str = Field(min_length=10)
+  source_type: LearnSourceType = "text"
+
+
+class LearnContentResponse(BaseModel):
+  topic: str
+  level: str
+  summary: str
+  key_points: List[str]
+  vocabulary: List[LearnVocabItem]
+  exercises: List[LearnExercise]
+
+
+class LearnEvaluateRequest(BaseModel):
+  exercise_type: LearnExerciseType
+  question: str
+  correct_answer: str
+  user_answer: str
+  context: str = ""
+
+
+class LearnEvaluationResponse(BaseModel):
+  score: int
+  grammar: int
+  vocabulary: int
+  structure: int
+  fluency: int
+  is_correct: bool
+  feedback: List[str]
+  improved_answer: str
+  explanation: str
+
+
+class LearnSaveSessionRequest(BaseModel):
+  source_type: LearnSourceType
+  topic: str | None = None
+  level: str | None = None
+  score: float | None = None
+  grammar: float | None = None
+  vocabulary: float | None = None
+  structure: float | None = None
+  exercises_total: int = 0
+  exercises_completed: int = 0
 

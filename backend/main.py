@@ -13,6 +13,7 @@ from routers.exam_routes import router as exam_router
 from routers.listening_routes import router as listening_router
 from routers.passage_routes import router as passage_router
 from routers.performance_routes import router as performance_router
+from routers.learn_routes import router as learn_router
 from routers.speaking_routes import router as speaking_router
 from routers.writing_routes import router as writing_router
 
@@ -55,6 +56,7 @@ app.include_router(listening_router)
 app.include_router(writing_router)
 app.include_router(auth_router)
 app.include_router(speaking_router)
+app.include_router(learn_router)
 
 
 @app.on_event("startup")

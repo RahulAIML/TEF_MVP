@@ -22,9 +22,25 @@ export interface WritingSummary {
   recent_submissions: WritingSubmissionSummary[];
 }
 
+export interface LearnSessionSummary {
+  id: number;
+  topic?: string | null;
+  level?: string | null;
+  score?: number | null;
+  exercises_completed: number;
+  exercises_total: number;
+  created_at: string;
+}
+
+export interface LearnSummary {
+  average_score: number;
+  recent_sessions: LearnSessionSummary[];
+}
+
 export interface DashboardSummaryResponse {
   reading: ModuleExamSummary;
   listening: ModuleExamSummary;
   writing: WritingSummary;
+  learning: LearnSummary;
 }
 
