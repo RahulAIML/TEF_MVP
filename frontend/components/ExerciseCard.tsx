@@ -43,6 +43,7 @@ function useMic(onTranscript: (t: string) => void) {
   const [isListening, setIsListening] = useState(false);
   const [micError, setMicError] = useState("");
   const recRef = useRef<SpeechRecognitionLike | null>(null);
+  const lastResultIndexRef = useRef(0);
 
   const toggle = useCallback(() => {
     if (isListening) {
@@ -61,11 +62,19 @@ function useMic(onTranscript: (t: string) => void) {
     }
     const rec = new Ctor();
     rec.lang = "fr-FR";
-    rec.continuous = false;
+    rec.continuous = true;
     rec.interimResults = false;
+    lastResultIndexRef.current = 0;
     rec.onresult = (e) => {
-      const text = e.results[0][0].transcript.trim();
-      if (text) onTranscript(text);
+      // Only process new results since last callback
+      const texts: string[] = [];
+      for (let i = lastResultIndexRef.current; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript.trim();
+        if (t) texts.push(t);
+      }
+      lastResultIndexRef.current = e.results.length;
+      const combined = texts.join(" ").trim();
+      if (combined) onTranscript(combined);
     };
     rec.onerror = (e) => {
       const code = e.error ?? "";
