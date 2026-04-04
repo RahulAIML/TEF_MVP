@@ -272,6 +272,9 @@ export default function SpeakingPage() {
     void handleEvaluate();
   };
 
+  // ── Derived state (must be defined before useMemo that references it) ──────
+  const isSessionActive = history.length > 0 || convState !== "idle";
+
   // ── Status label ──────────────────────────────────────────────────────────
   const statusLabel = useMemo(() => {
     if (mode === "exam" && !isExamStarted) return "Start the exam to begin.";
@@ -281,14 +284,12 @@ export default function SpeakingPage() {
       case "listening":  return "Listening... speak now.";
       default:           return handsFreeEnabled ? "Hands-free active — waiting." : isSessionActive ? "Tap Start Recording to answer." : "Ready.";
     }
-  }, [convState, handsFreeEnabled, mode, isExamStarted]);
+  }, [convState, handsFreeEnabled, mode, isExamStarted, isSessionActive]);
 
   const taskLabel = useMemo(
     () => (taskType === "role_play" ? "Task 1: Role-play" : "Task 2: Opinion discussion"),
     [taskType]
   );
-
-  const isSessionActive = history.length > 0 || convState !== "idle";
 
   const stateIndicatorColor: Record<ConvState, string> = {
     idle:       "bg-slate-300",
