@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { ChevronDown, ChevronUp, Volume2 } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import ExerciseCard from "@/components/ExerciseCard";
 import { Button } from "@/components/ui/button";
@@ -198,6 +199,19 @@ export default function LearnPage() {
   const allAnswered = exercises.length > 0 && exercises.every((e) => e.answer.trim() !== "");
   const anyAnswered = exercises.some((e) => e.answer.trim() !== "");
 
+  const [passageOpen, setPassageOpen] = useState(true);
+
+  function speakText(text: string) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const frVoice = voices.find((v) => v.lang.startsWith("fr"));
+    if (frVoice) utt.voice = frVoice;
+    utt.rate = 0.88;
+    window.speechSynthesis.speak(utt);
+  }
+
   return (
     <AppShell title="Practice Lab" subtitle="Upload content, practise exercises, get instant feedback" backHref="/">
       <div className="space-y-6">
@@ -352,6 +366,41 @@ export default function LearnPage() {
             {/* ── ALL EXERCISES (shown at once) ───────────────────────────────── */}
             {(pageState === "exercises" || pageState === "complete") && (
               <div className="space-y-6">
+
+                {/* ── Original passage (always visible, collapsible) ── */}
+                <div className="overflow-hidden rounded-2xl border border-indigo-200 bg-indigo-50 shadow-sm">
+                  <button
+                    onClick={() => setPassageOpen((p) => !p)}
+                    className="flex w-full items-center justify-between px-5 py-3 text-left"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
+                        Original Passage
+                      </span>
+                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                        Reference
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); speakText(inputText); }}
+                        title="Listen to passage"
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700 transition"
+                      >
+                        <Volume2 className="h-3.5 w-3.5" /> Listen
+                      </button>
+                      {passageOpen
+                        ? <ChevronUp className="h-4 w-4 text-indigo-400" />
+                        : <ChevronDown className="h-4 w-4 text-indigo-400" />
+                      }
+                    </div>
+                  </button>
+                  {passageOpen && (
+                    <div className="border-t border-indigo-100 px-5 py-4 text-sm leading-7 text-slate-800 whitespace-pre-wrap">
+                      {inputText}
+                    </div>
+                  )}
+                </div>
                 {/* Progress bar */}
                 <div className="flex items-center gap-3">
                   <div className="flex flex-1 gap-1">
