@@ -199,7 +199,7 @@ export default function LearnPage() {
   const anyAnswered = exercises.some((e) => e.answer.trim() !== "");
 
   return (
-    <AppShell title="AI Learn" subtitle="Upload content — AI teaches, you practice, AI evaluates" backHref="/">
+    <AppShell title="Practice Lab" subtitle="Upload content, practise exercises, get instant feedback" backHref="/">
       <div className="space-y-6">
 
         {error && (
@@ -221,7 +221,7 @@ export default function LearnPage() {
                     onClick={() => setTab("upload")}>Upload File</Button>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Paste any French text or upload a PDF / image. AI analyzes it and builds 5 exercises for you to answer all at once.
+                  Paste any French text or upload a document. The system builds 5 exercises for you to answer and evaluates all of them at once.
                 </p>
               </CardContent>
             </Card>

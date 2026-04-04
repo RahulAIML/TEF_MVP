@@ -6,11 +6,11 @@ import AppShell from "@/components/AppShell";
 
 const modules = [
   {
-    group: "AI-Powered",
+    group: "Practice Lab",
     items: [
       {
-        title: "AI Learn",
-        description: "Paste any text or upload a PDF — AI generates exercises, evaluates all 5 answers at once, and tracks your progress.",
+        title: "Practice Lab",
+        description: "Paste any French text or upload a document — get structured exercises, instant feedback, and progress tracking.",
         href: "/learn",
         icon: Sparkles,
         accent: "bg-indigo-600",
@@ -23,28 +23,28 @@ const modules = [
     items: [
       {
         title: "Reading Module",
-        description: "40-question mock exam across 5 sections + Passage Analyzer with AI text explanations and TTS.",
+        description: "Full 40-question exam across 5 sections plus a Passage Analyzer with text explanations and pronunciation.",
         href: "/reading",
         icon: BookOpen,
         accent: "bg-violet-500"
       },
       {
         title: "Listening Module",
-        description: "AI-generated audio MCQs with ElevenLabs voice synthesis. Practice and exam modes.",
+        description: "Audio-based multiple-choice questions with French narration. Practice and exam modes available.",
         href: "/listening-exam",
         icon: Headphones,
         accent: "bg-sky-500"
       },
       {
         title: "Speaking Module",
-        description: "Live conversation with an AI examiner. Hands-free (auto silence detection) or manual mode.",
+        description: "Live conversation with an examiner. Hands-free mode with silence detection or fully manual control.",
         href: "/speaking",
         icon: Mic,
         accent: "bg-rose-500"
       },
       {
         title: "Writing Module",
-        description: "Guided Task 1 & 2 practice with step-by-step AI feedback on grammar, structure, and coherence.",
+        description: "Guided Task 1 & Task 2 practice with step-by-step feedback on grammar, structure, and coherence.",
         href: "/writing",
         icon: PenSquare,
         accent: "bg-amber-500"
@@ -56,7 +56,7 @@ const modules = [
     items: [
       {
         title: "Dashboard",
-        description: "Track accuracy trends, section-wise scores, weak areas, and personalized improvement tips.",
+        description: "Track accuracy trends, section-wise scores, weak areas, and personalised improvement tips.",
         href: "/dashboard",
         icon: LayoutDashboard,
         accent: "bg-emerald-500"
@@ -67,7 +67,7 @@ const modules = [
 
 export default function HomePage() {
   return (
-    <AppShell title="TEF Canada Trainer" subtitle="Choose a module to start training">
+    <AppShell title="TEF Canada Trainer" subtitle="Choose a module to start practising">
       <div className="space-y-10 max-w-5xl">
         {modules.map((group) => (
           <div key={group.group}>
@@ -107,8 +107,7 @@ export default function HomePage() {
             </div>
           </div>
         ))}
-
-        <p className="text-xs text-slate-400">Demo mode — login disabled, all features active.</p>
+        <p className="text-xs text-slate-400">Demo mode — no login required. All modules active.</p>
       </div>
     </AppShell>
   );

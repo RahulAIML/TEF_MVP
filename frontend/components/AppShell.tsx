@@ -3,7 +3,8 @@
 import type { ReactNode } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopNav from "@/components/TopNav";
-import GlobalAIChat from "@/components/GlobalAIChat";
+import Breadcrumb from "@/components/Breadcrumb";
+import StudyAssistant from "@/components/GlobalAIChat";
 
 interface AppShellProps {
   title: string;
@@ -19,13 +20,14 @@ export default function AppShell({ title, subtitle, backHref, children }: AppShe
         <Sidebar />
         <div className="flex min-h-screen flex-1 flex-col">
           <TopNav title={title} subtitle={subtitle} backHref={backHref} />
+          <Breadcrumb />
           <main className="flex-1 p-6">
             {children}
           </main>
         </div>
       </div>
-      {/* Global AI assistant — available on every page */}
-      <GlobalAIChat />
+      {/* Study assistant — available on every page */}
+      <StudyAssistant />
     </div>
   );
 }

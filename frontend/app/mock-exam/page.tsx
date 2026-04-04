@@ -245,7 +245,7 @@ export default function MockExamPage() {
 
     if (questionList.length < TOTAL_QUESTIONS) {
       const note =
-        `Only ${questionList.length} of ${TOTAL_QUESTIONS} questions were generated. ` +
+        `Only ${questionList.length} of ${TOTAL_QUESTIONS} questions have loaded. ` +
         "Score will be based on these questions only.";
       setSubmitNote(note);
       setConfirmPartial(true);
@@ -391,7 +391,7 @@ export default function MockExamPage() {
             {loadingQuestion && (
               <div className="flex items-center gap-2 text-sm text-slate-500">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Generating question…
+                Loading question…
               </div>
             )}
             {currentQuestionData && (

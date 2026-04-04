@@ -18,7 +18,7 @@ const groups = [
     label: "Core",
     items: [
       { href: "/", label: "Home", icon: Home },
-      { href: "/learn", label: "AI Learn", icon: Sparkles }
+      { href: "/learn", label: "Practice Lab", icon: Sparkles }
     ]
   },
   {

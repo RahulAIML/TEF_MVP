@@ -23,7 +23,7 @@ const modes = [
   {
     title: "Passage Analyzer",
     description:
-      "Generate a French passage, read it at your own pace, look up words, get AI explanations, and take a 10-question quiz.",
+      "Generate a French passage, read at your own pace, look up vocabulary, get detailed explanations, and take a 10-question quiz.",
     href: "/passage-analyzer",
     icon: FileSearch,
     accent: "bg-indigo-500",

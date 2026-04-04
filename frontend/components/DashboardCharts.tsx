@@ -111,8 +111,8 @@ function LearnSection({ learning }: { learning: LearnSummary }) {
     return (
       <div className="space-y-4">
         <SectionHeader
-          title="AI Learning"
-          subtitle="Sessions from the AI Learn module"
+          title="Practice Lab"
+          subtitle="Sessions from the Practice Lab module"
           value="No sessions yet"
         />
         <EmptyCard title="Learning Progress" />
@@ -127,7 +127,7 @@ function LearnSection({ learning }: { learning: LearnSummary }) {
   return (
     <div className="space-y-4">
       <SectionHeader
-        title="AI Learning"
+        title="Practice Lab"
         subtitle="Exercise scores and recent sessions"
         value={`Average score ${learning.average_score.toFixed(1)}/10`}
       />

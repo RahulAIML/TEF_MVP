@@ -289,8 +289,8 @@ export default function ListeningExamPage() {
 
     if (questionList.length < TOTAL_QUESTIONS) {
       const note =
-        `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
-        "Score is based only on generated questions.";
+        `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions loaded. ` +
+        "Score is based only on completed questions.";
       setSubmitNote(note);
       setConfirmPartial(true);
       return;
