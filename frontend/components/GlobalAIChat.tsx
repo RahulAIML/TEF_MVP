@@ -1,23 +1,12 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import { HelpCircle, X, Send, Loader2, Volume2, Globe } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { HelpCircle, X, Send, Loader2, Volume2, VolumeX, Globe } from "lucide-react";
 import { chatWithAI } from "@/services/api";
 
 interface Message {
   role: "user" | "assistant";
   text: string;
-}
-
-function speakFrench(text: string) {
-  if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  const voices = window.speechSynthesis.getVoices();
-  const frVoice = voices.find((v) => v.lang.startsWith("fr"));
-  if (frVoice) utt.voice = frVoice;
-  utt.rate = 0.9;
-  window.speechSynthesis.speak(utt);
 }
 
 const QUICK_ACTIONS = [
@@ -34,7 +23,49 @@ export default function StudyAssistant() {
   const [loading, setLoading] = useState(false);
   const [context, setContext] = useState("");
   const [showContext, setShowContext] = useState(false);
+  const [speakingIndex, setSpeakingIndex] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Track speaking state from speechSynthesis events
+  useEffect(() => {
+    if (!("speechSynthesis" in window)) return;
+    const onEnd = () => setSpeakingIndex(null);
+    window.speechSynthesis.addEventListener("end" as never, onEnd);
+    return () => window.speechSynthesis.removeEventListener("end" as never, onEnd);
+  }, []);
+
+  const stopSpeaking = useCallback(() => {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    setSpeakingIndex(null);
+  }, []);
+
+  const speakMessage = useCallback((text: string, index: number) => {
+    if (!("speechSynthesis" in window)) return;
+    // If already speaking this message, stop it
+    if (speakingIndex === index) {
+      stopSpeaking();
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utt = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const frVoice = voices.find((v) => v.lang.startsWith("fr"));
+    if (frVoice) utt.voice = frVoice;
+    utt.rate = 0.9;
+    utt.onend = () => setSpeakingIndex(null);
+    utt.onerror = () => setSpeakingIndex(null);
+    setSpeakingIndex(index);
+    window.speechSynthesis.speak(utt);
+  }, [speakingIndex, stopSpeaking]);
+
+  // Stop audio when panel closes
+  const handleToggleOpen = useCallback(() => {
+    setOpen((p) => {
+      if (p) stopSpeaking();
+      return !p;
+    });
+  }, [stopSpeaking]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -43,6 +74,7 @@ export default function StudyAssistant() {
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
+    stopSpeaking();
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
     setInput("");
     setLoading(true);
@@ -58,7 +90,7 @@ export default function StudyAssistant() {
       setLoading(false);
       setTimeout(scrollToBottom, 100);
     }
-  }, [loading, context, scrollToBottom]);
+  }, [loading, context, scrollToBottom, stopSpeaking]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -71,7 +103,7 @@ export default function StudyAssistant() {
     <>
       {/* Trigger button */}
       <button
-        onClick={() => setOpen((p) => !p)}
+        onClick={handleToggleOpen}
         aria-label={open ? "Close Study Assistant" : "Open Study Assistant"}
         className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-indigo-600 text-white shadow-lg ring-4 ring-indigo-100 transition-all duration-200 hover:bg-indigo-700 hover:scale-105"
       >
@@ -92,13 +124,25 @@ export default function StudyAssistant() {
                 <p className="text-[10px] text-indigo-200">Translate · Explain · Practise</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowContext((p) => !p)}
-              title="Add passage context"
-              className="rounded-lg p-1 text-indigo-200 hover:bg-white/10 hover:text-white"
-            >
-              <Globe className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Global stop button — visible when audio is playing */}
+              {speakingIndex !== null && (
+                <button
+                  onClick={stopSpeaking}
+                  title="Stop audio"
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-white bg-white/20 hover:bg-white/30 transition"
+                >
+                  <VolumeX className="h-3.5 w-3.5" /> Stop
+                </button>
+              )}
+              <button
+                onClick={() => setShowContext((p) => !p)}
+                title="Add passage context"
+                className="rounded-lg p-1 text-indigo-200 hover:bg-white/10 hover:text-white"
+              >
+                <Globe className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           {/* Context input */}
@@ -152,11 +196,18 @@ export default function StudyAssistant() {
                 </div>
                 {msg.role === "assistant" && (
                   <button
-                    onClick={() => speakFrench(msg.text)}
-                    className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-indigo-600"
-                    title="Listen to pronunciation"
+                    onClick={() => speakMessage(msg.text, i)}
+                    className={`flex items-center gap-1 text-[10px] transition-colors ${
+                      speakingIndex === i
+                        ? "text-rose-500 hover:text-rose-700"
+                        : "text-slate-400 hover:text-indigo-600"
+                    }`}
+                    title={speakingIndex === i ? "Stop audio" : "Listen to this"}
                   >
-                    <Volume2 className="h-3 w-3" /> Listen
+                    {speakingIndex === i
+                      ? <><VolumeX className="h-3 w-3" /> Stop</>
+                      : <><Volume2 className="h-3 w-3" /> Listen</>
+                    }
                   </button>
                 )}
               </div>
