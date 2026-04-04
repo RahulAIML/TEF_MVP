@@ -378,7 +378,7 @@ export default function ListeningExamPage() {
   const questionNavigatorAnswers = useMemo(() => answers, [answers]);
 
   return (
-    <AppShell title="Listening Module" subtitle="Practice or take a full mock listening exam">
+    <AppShell title="Listening Module" subtitle="Practice or take a full mock listening exam" backHref="/">
       <div className="space-y-6">
         <div className="flex flex-wrap gap-3">
           <Button

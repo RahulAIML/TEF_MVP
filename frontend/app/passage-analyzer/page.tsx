@@ -99,7 +99,7 @@ export default function PassageAnalyzerPage() {
   };
 
   return (
-    <AppShell title="Passage Analyzer" subtitle="Analyze passages and explain selected text">
+    <AppShell title="Passage Analyzer" subtitle="Analyze passages and explain selected text" backHref="/reading">
       <div className="space-y-6">
         <Card className="border-slate-200 shadow-sm">
           <CardContent className="flex flex-wrap items-center justify-between gap-4 p-6">

@@ -470,7 +470,7 @@ export default function WritingPage() {
   );
 
   return (
-    <AppShell title="Writing Module" subtitle="Guided learning and exam simulation for TEF writing">
+    <AppShell title="Writing Module" subtitle="Guided learning and exam simulation for TEF writing" backHref="/">
       <div className="space-y-6">
         {!mode || !isStarted ? (
           <div className="grid gap-6 lg:grid-cols-2">

@@ -298,7 +298,7 @@ export default function SpeakingPage() {
   };
 
   return (
-    <AppShell title="Speaking Module" subtitle="Real-time TEF Canada speaking practice">
+    <AppShell title="Speaking Module" subtitle="Real-time TEF Canada speaking practice" backHref="/">
       <div className="space-y-6">
         {/* Mode buttons */}
         <div className="flex flex-wrap items-center gap-3">

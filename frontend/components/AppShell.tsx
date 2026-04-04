@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import Sidebar from "@/components/Sidebar";
 import TopNav from "@/components/TopNav";
+import GlobalAIChat from "@/components/GlobalAIChat";
 
 interface AppShellProps {
   title: string;
@@ -23,6 +24,8 @@ export default function AppShell({ title, subtitle, backHref, children }: AppShe
           </main>
         </div>
       </div>
+      {/* Global AI assistant — available on every page */}
+      <GlobalAIChat />
     </div>
   );
 }

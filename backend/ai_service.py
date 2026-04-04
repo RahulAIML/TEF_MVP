@@ -1463,4 +1463,32 @@ def extract_text_from_image_bytes(image_bytes: bytes, mime_type: str = "image/jp
   return str(getattr(response, "text", "") or "").strip()
 
 
+def ai_chat_reply(message: str, context: str = "", language: str = "en") -> str:
+  """Global AI assistant: translate, explain, answer questions about French/TEF content."""
+  context_block = f"\n\nContext (current passage or question):\n{context[:1500]}" if context.strip() else ""
+  lang_instruction = (
+    "Respond in English unless the user asks in French or asks for French output."
+    if language == "en"
+    else "Respond in French."
+  )
+
+  prompt = f"""You are an expert TEF Canada preparation assistant. You help students:
+- Translate French text to English and vice versa
+- Explain French grammar, vocabulary, and idiomatic expressions
+- Answer questions about TEF exam topics (Reading, Listening, Speaking, Writing)
+- Provide pronunciation guidance and phonetic breakdowns
+- Explain why certain answers are correct/incorrect
+- Give study tips and learning strategies
+
+{lang_instruction}
+Be concise, clear, and pedagogically helpful. For translations, always show both the original and translation.
+For vocabulary, include example sentences.{context_block}
+
+User message: {message}
+
+Respond helpfully:"""
+
+  return _generate_text(prompt, temperature=0.3)
+
+
 

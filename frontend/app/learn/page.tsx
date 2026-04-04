@@ -199,7 +199,7 @@ export default function LearnPage() {
   const anyAnswered = exercises.some((e) => e.answer.trim() !== "");
 
   return (
-    <AppShell title="AI Learn" subtitle="Upload content — AI teaches, you practice, AI evaluates">
+    <AppShell title="AI Learn" subtitle="Upload content — AI teaches, you practice, AI evaluates" backHref="/">
       <div className="space-y-6">
 
         {error && (

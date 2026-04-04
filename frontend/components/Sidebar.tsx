@@ -9,23 +9,25 @@ import {
   Mic,
   PenSquare,
   Sparkles,
-  ChevronRight
+  ChevronRight,
+  Home
 } from "lucide-react";
 
 const groups = [
   {
     label: "Core",
     items: [
+      { href: "/", label: "Home", icon: Home },
       { href: "/learn", label: "AI Learn", icon: Sparkles }
     ]
   },
   {
     label: "Modules",
     items: [
-      { href: "/reading", label: "Reading", icon: BookOpen },
-      { href: "/listening-exam", label: "Listening", icon: Headphones },
-      { href: "/speaking", label: "Speaking", icon: Mic },
-      { href: "/writing", label: "Writing", icon: PenSquare }
+      { href: "/reading", label: "Reading Module", icon: BookOpen },
+      { href: "/listening-exam", label: "Listening Module", icon: Headphones },
+      { href: "/speaking", label: "Speaking Module", icon: Mic },
+      { href: "/writing", label: "Writing Module", icon: PenSquare }
     ]
   },
   {
@@ -36,7 +38,7 @@ const groups = [
   }
 ];
 
-// Paths that belong to a parent nav item (for active highlighting)
+// Sub-paths that map to a parent nav item for active highlighting
 const parentMap: Record<string, string> = {
   "/mock-exam": "/reading",
   "/passage-analyzer": "/reading"
@@ -68,7 +70,9 @@ export default function Sidebar() {
             </p>
             <div className="space-y-0.5">
               {group.items.map((item) => {
-                const isActive = activePath === item.href || pathname.startsWith(item.href + "/");
+                const isActive =
+                  activePath === item.href ||
+                  (item.href !== "/" && pathname.startsWith(item.href + "/"));
                 const Icon = item.icon;
                 return (
                   <Link
