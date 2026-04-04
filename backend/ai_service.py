@@ -1320,58 +1320,98 @@ def evaluate_learn_answer(
   is_speaking = exercise_type == "speaking_prompt"
 
   speaking_extra = """
-  "tone": 7,
-  "pronunciation": 6,""" if is_speaking else ""
+  "tone": 0,
+  "pronunciation": 0,""" if is_speaking else ""
 
   speaking_rules = """
-- tone: 0-10 — assess register, politeness, naturalness of expression
-- pronunciation: 0-10 — infer from transcription: missing liaisons, accents dropped,
-  common French/English interference patterns (e.g. silent letters spoken, wrong nasal vowels),
-  unnatural word stress. Note: inferred from written transcription of speech.""" if is_speaking else ""
+- tone (0–10): register, politeness, naturalness. 0 if response is not in French or is nonsensical.
+- pronunciation (0–10): inferred from transcription — liaisons, nasal vowels, word stress, French/English interference. 0 if response is not in French.""" if is_speaking else ""
 
-  prompt = f"""You are a French language teacher evaluating a student's answer for TEF Canada preparation.
+  # Exercise-type specific scoring guidance
+  type_rules = {
+    "mcq": (
+      "MCQ RULES:\n"
+      "- is_correct=true ONLY if the student selected the exact correct option (A/B/C/D).\n"
+      "- If wrong: score=0, grammar=0, vocabulary=0, structure=0, fluency=0.\n"
+      "- If correct: score=10, grammar=10, vocabulary=10, structure=10, fluency=10.\n"
+      "- Do NOT give partial credit for MCQ — it is either right or wrong."
+    ),
+    "fill_blank": (
+      "FILL-IN-THE-BLANK RULES:\n"
+      "- is_correct=true only if the student's answer fills the blank(s) correctly.\n"
+      "- A nonsense answer like random letters or words gets score=0, all sub-scores=0.\n"
+      "- A partially correct answer may score 3–5 with explanation.\n"
+      "- Score all dimensions based on how well the blank was filled."
+    ),
+    "sentence_correction": (
+      "SENTENCE CORRECTION RULES:\n"
+      "- The student must fix ALL errors in the given sentence.\n"
+      "- If the student submits the SAME uncorrected sentence, score=0, grammar=0, all zeros.\n"
+      "- If the student makes only some corrections, score proportionally (3–6).\n"
+      "- Only award 9–10 if all errors are fully corrected and the sentence is natural."
+    ),
+    "writing_task": (
+      "WRITING TASK RULES:\n"
+      "- The student must write 3–4 complete French sentences addressing the prompt.\n"
+      "- A single sentence that does NOT address the prompt: score ≤ 2, structure=0–2.\n"
+      "- Evaluate grammar, vocabulary, structure, and fluency strictly based on TEF B1–B2 standards.\n"
+      "- Do not reward effort if content does not match what was asked."
+    ),
+    "speaking_prompt": (
+      "SPEAKING RULES:\n"
+      "- The student must speak in French for 1–2 minutes on the topic.\n"
+      "- If the response is not in French, or is a single unrelated phrase: all scores=0–1.\n"
+      "- If the response is in French but very short: score ≤ 3.\n"
+      "- Evaluate tone, pronunciation, fluency, vocabulary, and grammar based on TEF standards."
+    )
+  }.get(exercise_type, "Evaluate based on correctness, grammar, and relevance to the prompt.")
+
+  prompt = f"""You are a strict TEF Canada French examiner evaluating a student's exercise answer.
+Apply professional examination standards — do NOT inflate scores to be encouraging.
 
 Exercise type: {exercise_type}
-Question: {question}
-Expected answer: {correct_answer}
+Question / Prompt: {question}
+Expected correct answer: {correct_answer}
 Student's answer: {user_answer}
-Context: {context}
+Passage context: {context[:800] if context else "N/A"}
 
-Evaluate the student's answer and return this JSON:
+{type_rules}
+
+GENERAL SCORING RULES (apply to all exercise types unless overridden above):
+- A completely blank, nonsensical, or off-topic answer (e.g. random letters, wrong language,
+  unrelated words) MUST receive 0 for ALL scores including grammar, vocabulary, structure, fluency.
+- Do NOT give marks for effort alone — marks reflect correctness and quality only.
+- Grammar (0–10): French grammatical accuracy. 0 = no French grammar demonstrated.
+- Vocabulary (0–10): Range and accuracy of French vocabulary. 0 = no relevant vocabulary.
+- Structure (0–10): Organisation and coherence. 0 = no structure.
+- Fluency (0–10): Natural flow of French. 0 = not in French or incomprehensible.{speaking_rules}
+- is_correct: true only if the answer is substantially correct for this exercise type.
+- feedback: 2–4 specific points explaining exactly what is wrong and how to fix it.
+- improved_answer: the correct/model answer in French.
+- explanation: why the correct answer is right.
+
+Return ONLY this JSON (replace 0 with actual scores — do NOT copy placeholder values):
 {{
-  "score": 7,
-  "grammar": 7,
-  "vocabulary": 8,
-  "structure": 7,
-  "fluency": 6,{speaking_extra}
-  "is_correct": true,
-  "feedback": [
-    "Specific feedback point 1",
-    "Specific feedback point 2",
-    "Specific feedback point 3"
-  ],
-  "improved_answer": "An improved version of the student's answer in French",
-  "explanation": "Brief explanation of the correct answer"
+  "score": 0,
+  "grammar": 0,
+  "vocabulary": 0,
+  "structure": 0,
+  "fluency": 0,{speaking_extra}
+  "is_correct": false,
+  "feedback": ["Point 1", "Point 2", "Point 3"],
+  "improved_answer": "...",
+  "explanation": "..."
 }}
 
-Rules:
-- score: 0–10 overall
-- grammar/vocabulary/structure/fluency: 0–10 each{speaking_rules}
-- is_correct: true if answer is substantially correct (for mcq/fill_blank must match exactly)
-- For MCQ/fill_blank: is_correct=true only if answer matches exactly
-- For writing/speaking: evaluate quality holistically
-- feedback: 2–4 specific, constructive points (for speaking include tone and pronunciation tips)
-- improved_answer: always provide a better version in French
-- Be encouraging and educational
-Return only valid JSON."""
+Return only valid JSON. No markdown. No commentary."""
 
-  payload = _generate_json(prompt, temperature=0.4)
+  payload = _generate_json(prompt, temperature=0.3)
 
   def _clamp_score(v: Any, max_val: int = 10) -> int:
     try:
       return max(0, min(max_val, int(v)))
     except (TypeError, ValueError):
-      return 5
+      return 0
 
   feedback = payload.get("feedback", [])
   if isinstance(feedback, str):
@@ -1379,19 +1419,51 @@ Return only valid JSON."""
   feedback = [str(f).strip() for f in feedback if str(f).strip()][:4]
 
   result: Dict[str, Any] = {
-    "score": _clamp_score(payload.get("score")),
-    "grammar": _clamp_score(payload.get("grammar")),
-    "vocabulary": _clamp_score(payload.get("vocabulary")),
-    "structure": _clamp_score(payload.get("structure")),
-    "fluency": _clamp_score(payload.get("fluency")),
-    "is_correct": bool(payload.get("is_correct", False)),
-    "feedback": feedback,
-    "improved_answer": str(payload.get("improved_answer", "")).strip(),
+    "score":       _clamp_score(payload.get("score")),
+    "grammar":     _clamp_score(payload.get("grammar")),
+    "vocabulary":  _clamp_score(payload.get("vocabulary")),
+    "structure":   _clamp_score(payload.get("structure")),
+    "fluency":     _clamp_score(payload.get("fluency")),
+    "is_correct":  bool(payload.get("is_correct", False)),
+    "feedback":    feedback,
+    "improved_answer": str(payload.get("improved_answer", correct_answer)).strip(),
     "explanation": str(payload.get("explanation", "")).strip()
   }
   if is_speaking:
-    result["tone"] = _clamp_score(payload.get("tone"))
+    result["tone"]          = _clamp_score(payload.get("tone"))
     result["pronunciation"] = _clamp_score(payload.get("pronunciation"))
+
+  # ── Hard guardrails — override model if clearly wrong ─────────────────────
+  answer_stripped = user_answer.strip().lower()
+
+  # 1. MCQ: score must be binary (0 or 10)
+  if exercise_type == "mcq":
+    selected = answer_stripped.upper().rstrip(".")
+    expected = correct_answer.strip().upper().rstrip(".")
+    is_right = selected == expected or selected == expected[0]
+    result["is_correct"] = is_right
+    binary = 10 if is_right else 0
+    result["score"] = binary
+    result["grammar"] = result["vocabulary"] = result["structure"] = result["fluency"] = binary
+
+  # 2. Sentence correction: if user submitted identical (uncorrected) text, all zeros
+  if exercise_type == "sentence_correction":
+    original = question.lower().replace("correct this sentence:", "").replace("corrigez cette phrase:", "").strip().strip('"').strip()
+    if answer_stripped == original or answer_stripped == original.rstrip(".").rstrip():
+      result["score"] = 0
+      result["grammar"] = result["vocabulary"] = result["structure"] = result["fluency"] = 0
+      result["is_correct"] = False
+      if not result["feedback"]:
+        result["feedback"] = ["You submitted the original sentence without making any corrections."]
+
+  # 3. Clearly nonsensical / non-French answer (< 3 chars, or contains no French words)
+  if len(answer_stripped) < 3:
+    for key in ("score", "grammar", "vocabulary", "structure", "fluency"):
+      result[key] = 0
+    if is_speaking:
+      result["tone"] = result["pronunciation"] = 0
+    result["is_correct"] = False
+
   return result
 
 
