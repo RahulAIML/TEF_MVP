@@ -6,11 +6,11 @@ import AppShell from "@/components/AppShell";
 
 const modules = [
   {
-    group: "Practice Lab",
+    group: "AI-Powered",
     items: [
       {
-        title: "Practice Lab",
-        description: "Paste any French text or upload a document — get structured exercises, instant feedback, and progress tracking.",
+        title: "AI Learn",
+        description: "Paste text or upload a PDF — AI builds exercises, evaluates answers, tracks your progress.",
         href: "/learn",
         icon: Sparkles,
         accent: "bg-indigo-600",
@@ -22,29 +22,29 @@ const modules = [
     group: "TEF Modules",
     items: [
       {
-        title: "Reading Module",
-        description: "Full 40-question exam across 5 sections plus a Passage Analyzer with text explanations and pronunciation.",
+        title: "Reading",
+        description: "40-question mock exam + passage analyzer with AI text explanations.",
         href: "/reading",
         icon: BookOpen,
         accent: "bg-violet-500"
       },
       {
-        title: "Listening Module",
-        description: "Audio-based multiple-choice questions with French narration. Practice and exam modes available.",
+        title: "Listening",
+        description: "AI-generated audio MCQs with ElevenLabs voice synthesis.",
         href: "/listening-exam",
         icon: Headphones,
         accent: "bg-sky-500"
       },
       {
-        title: "Speaking Module",
-        description: "Live conversation with an examiner. Hands-free mode with silence detection or fully manual control.",
+        title: "Speaking",
+        description: "Live conversation with an AI examiner. Hands-free or manual mode.",
         href: "/speaking",
         icon: Mic,
         accent: "bg-rose-500"
       },
       {
-        title: "Writing Module",
-        description: "Guided Task 1 & Task 2 practice with step-by-step feedback on grammar, structure, and coherence.",
+        title: "Writing",
+        description: "Guided Task 1 & 2 practice with step-by-step AI feedback.",
         href: "/writing",
         icon: PenSquare,
         accent: "bg-amber-500"
@@ -56,7 +56,7 @@ const modules = [
     items: [
       {
         title: "Dashboard",
-        description: "Track accuracy trends, section-wise scores, weak areas, and personalised improvement tips.",
+        description: "Track scores, accuracy trends, weak areas and overall progress.",
         href: "/dashboard",
         icon: LayoutDashboard,
         accent: "bg-emerald-500"
@@ -67,7 +67,7 @@ const modules = [
 
 export default function HomePage() {
   return (
-    <AppShell title="TEF Canada Trainer" subtitle="Choose a module to start practising">
+    <AppShell title="Home" subtitle="Choose a module to start training">
       <div className="space-y-10 max-w-5xl">
         {modules.map((group) => (
           <div key={group.group}>
@@ -81,8 +81,9 @@ export default function HomePage() {
                   <Link
                     key={mod.href}
                     href={mod.href}
-                    className="group relative flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-1 hover:scale-[1.01] hover:border-slate-300 hover:shadow-md"
+                    className="group relative flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
                   >
+                    {/* Icon + badge */}
                     <div className="flex items-start justify-between">
                       <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${mod.accent} text-white shadow-sm`}>
                         <Icon className="h-5 w-5" />
@@ -93,11 +94,15 @@ export default function HomePage() {
                         </span>
                       )}
                     </div>
+
+                    {/* Text */}
                     <div className="flex-1">
                       <h3 className="font-semibold text-slate-900">{mod.title}</h3>
                       <p className="mt-1 text-sm leading-relaxed text-slate-500">{mod.description}</p>
                     </div>
-                    <div className="flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors group-hover:text-indigo-600">
+
+                    {/* CTA arrow */}
+                    <div className="flex items-center gap-1 text-xs font-medium text-slate-400 transition-colors group-hover:text-slate-700">
                       Open module
                       <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                     </div>
@@ -107,7 +112,8 @@ export default function HomePage() {
             </div>
           </div>
         ))}
-        <p className="text-xs text-slate-400">Demo mode — no login required. All modules active.</p>
+
+        <p className="text-xs text-slate-400">Demo mode — login disabled, all features active.</p>
       </div>
     </AppShell>
   );

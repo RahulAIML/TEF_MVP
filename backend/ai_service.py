@@ -523,45 +523,36 @@ def generate_exam_question(question_number: int, session_id: str | None = None) 
     "press": "Use a brief press article or news report extract."
   }[question_type]
 
-  # Difficulty distribution: 20% easy, 50% medium, 30% hard
-  if question_number % 10 <= 2:
-    difficulty = "easy (B1)"
-    diff_note = "Test straightforward main idea or explicit detail. One clearly correct answer, distractors plausible but obviously wrong to a B1 reader."
-  elif question_number % 10 <= 7:
-    difficulty = "medium (B1–B2)"
-    diff_note = "Test inference or implicit meaning. Require the reader to connect two pieces of information. Distractors should use words from the text but lead to wrong conclusions."
-  else:
-    difficulty = "hard (B2–C1)"
-    diff_note = "Test tone, authorial intent, nuanced vocabulary, or complex inference. All four options must be plausible on the surface. Only a careful reader will identify the correct answer."
-
   prompt = f"""
-Generate one high-quality TEF Canada reading comprehension question in French at {difficulty} level.
+Generate one TEF Canada reading question in French.
 
-Return JSON with exactly these keys:
-text, question, options, correct_answer, explanation, question_type
+Return JSON with:
+text
+question
+options (array of 4)
+correct_answer
+explanation
+question_type
 
 Rules:
-- Language: French only (text, question, options, explanation).
+- Language: French only.
 - Question number: {question_number} of 40.
 - Question type: {label}.
 - {guidance}
-- Difficulty: {diff_note}
-- Text length: 80 to 120 words. Use realistic, natural French — NOT simplified or pedagogical prose.
-- Include at least one of: inference, tone detection, implicit meaning, vocabulary in context, or authorial purpose.
-- The question stem must NOT simply quote a phrase from the text; the reader must think.
-- Distractors must be plausible but wrong for a clear reason explained in the explanation.
+- Text length: 60 to 100 words.
+- The text must be unique within this session; do not reuse any previous situation, wording, or setting.
 - Scenario anchor: The text must take place in {place} and involve {context}.
-- Freshness seed: {freshness_token}. Use it to create a completely new scenario. Do not include the seed in the output.
-- Ensure the setting, names, and situation differ from any previous question of this type.
-- correct_answer must be exactly one of: A, B, C, D.
-- Output valid JSON only — no markdown fences, no commentary.
+- Freshness seed: {freshness_token}. Use it to create a new scenario. Do not include the seed in the output.
+- Ensure the setting, names, and situation differ from previous questions of this type.
+- correct_answer must be one of A, B, C, D.
+- Output valid JSON only (no markdown, no commentary).
 - Use this exact JSON shape:
 {{
   "text": "string",
   "question": "string",
   "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
   "correct_answer": "A",
-  "explanation": "string explaining why the correct answer is right and why the others are wrong",
+  "explanation": "string",
   "question_type": "{question_type}"
 }}
 """
@@ -612,18 +603,21 @@ def generate_listening_question(question_number: int, session_id: str | None = N
   freshness_token = _freshness_token()
   place, context = _scenario_from_seed(freshness_token)
   prompt = f"""
-Generate one high-quality TEF Canada listening comprehension question in French at B1–B2 level.
+Generate one TEF Canada listening question in French.
 
-Return JSON with exactly these keys:
-script, question, options, correct_answer, explanation
+Return JSON with:
+script
+question
+options (array of 4)
+correct_answer
+explanation
 
 Rules:
-- Language: French only (all fields).
-- Script length: 50 to 80 words (roughly 15–22 seconds of natural speech).
-- Style: authentic spoken French — announcement, radio news brief, interview excerpt, phone message, or dialogue.
+- Language: French only.
+- Script length: 8 to 20 seconds when spoken (roughly 35 to 70 words).
+- Style: natural spoken French; can be an announcement, interview, news brief, or dialogue.
 - Topic: {domain}; set in {place} involving {context}.
-- The question must test inference or implicit understanding, NOT just copying a phrase from the script.
-- Distractors must use vocabulary from the script but lead to wrong conclusions.
+- Include one clear MCQ question based on the script.
 - Options: exactly 4. correct_answer must be one of A, B, C, D.
 - Output valid JSON only (no markdown, no commentary).
 - Use this exact JSON shape:
@@ -632,7 +626,7 @@ Rules:
   "question": "string",
   "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
   "correct_answer": "A",
-  "explanation": "string explaining why the correct answer is right and others wrong"
+  "explanation": "string"
 }}
 """
 
@@ -1539,34 +1533,6 @@ def extract_text_from_image_bytes(image_bytes: bytes, mime_type: str = "image/jp
     image_part
   ])
   return str(getattr(response, "text", "") or "").strip()
-
-
-def ai_chat_reply(message: str, context: str = "", language: str = "en") -> str:
-  """Global AI assistant: translate, explain, answer questions about French/TEF content."""
-  context_block = f"\n\nContext (current passage or question):\n{context[:1500]}" if context.strip() else ""
-  lang_instruction = (
-    "Respond in English unless the user asks in French or asks for French output."
-    if language == "en"
-    else "Respond in French."
-  )
-
-  prompt = f"""You are an expert TEF Canada preparation assistant. You help students:
-- Translate French text to English and vice versa
-- Explain French grammar, vocabulary, and idiomatic expressions
-- Answer questions about TEF exam topics (Reading, Listening, Speaking, Writing)
-- Provide pronunciation guidance and phonetic breakdowns
-- Explain why certain answers are correct/incorrect
-- Give study tips and learning strategies
-
-{lang_instruction}
-Be concise, clear, and pedagogically helpful. For translations, always show both the original and translation.
-For vocabulary, include example sentences.{context_block}
-
-User message: {message}
-
-Respond helpfully:"""
-
-  return _generate_text(prompt, temperature=0.3)
 
 
 

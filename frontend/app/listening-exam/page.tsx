@@ -289,8 +289,8 @@ export default function ListeningExamPage() {
 
     if (questionList.length < TOTAL_QUESTIONS) {
       const note =
-        `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions loaded. ` +
-        "Score is based only on completed questions.";
+        `Partial submission: ${questionList.length} of ${TOTAL_QUESTIONS} questions generated. ` +
+        "Score is based only on generated questions.";
       setSubmitNote(note);
       setConfirmPartial(true);
       return;
@@ -378,7 +378,7 @@ export default function ListeningExamPage() {
   const questionNavigatorAnswers = useMemo(() => answers, [answers]);
 
   return (
-    <AppShell title="Listening Module" subtitle="Practice or take a full mock listening exam" backHref="/">
+    <AppShell title="Listening Module" subtitle="Practice or take a full mock listening exam">
       <div className="space-y-6">
         <div className="flex flex-wrap gap-3">
           <Button

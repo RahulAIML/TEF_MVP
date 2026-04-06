@@ -16,7 +16,6 @@ from routers.performance_routes import router as performance_router
 from routers.learn_routes import router as learn_router
 from routers.speaking_routes import router as speaking_router
 from routers.writing_routes import router as writing_router
-from routers.ai_chat_routes import router as ai_chat_router
 
 load_dotenv()
 
@@ -58,7 +57,6 @@ app.include_router(writing_router)
 app.include_router(auth_router)
 app.include_router(speaking_router)
 app.include_router(learn_router)
-app.include_router(ai_chat_router)
 
 
 @app.on_event("startup")

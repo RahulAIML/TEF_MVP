@@ -20,7 +20,6 @@ const EXAM_DURATION_SECONDS = 15 * 60;
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 const MAX_EXCHANGES = 5;
 
-// ── Conversation states ────────────────────────────────────────────────────
 type ConvState = "idle" | "listening" | "processing" | "speaking";
 
 const initialHints = [
@@ -42,7 +41,7 @@ export default function SpeakingPage() {
   const [timerActive, setTimerActive] = useState(false);
   const [isExamStarted, setIsExamStarted] = useState(false);
   const [hintsEnabled, setHintsEnabled] = useState(true);
-  const [handsFreeEnabled, setHandsFreeEnabled] = useState(true);
+  const [handsFreeEnabled, setHandsFreeEnabled] = useState(false);
   const [userTurnCount, setUserTurnCount] = useState(0);
 
   // Refs
@@ -57,12 +56,7 @@ export default function SpeakingPage() {
   useEffect(() => { historyRef.current = history; }, [history]);
   useEffect(() => { convStateRef.current = convState; }, [convState]);
 
-  // Derived state
-  const isThinking = convState === "processing";
-
-  // Stub — VAD removed; kept so resetSession / useEffect refs compile cleanly
-  const stopVAD = useCallback(() => undefined, []);
-
+  const isSessionActive = history.length > 0 || convState !== "idle";
 
   // ── Audio controls ────────────────────────────────────────────────────────
   const stopAudio = useCallback(() => {
@@ -71,8 +65,8 @@ export default function SpeakingPage() {
       audioRef.current.currentTime = 0;
       audioRef.current.src = "";
     }
-    stopVAD();
-  }, [stopVAD]);
+    if (convStateRef.current === "speaking") setConvState("idle");
+  }, []);
 
   // ── Listening controls ────────────────────────────────────────────────────
   const startListening = useCallback(() => {
@@ -85,8 +79,9 @@ export default function SpeakingPage() {
   }, [mode, isExamStarted]);
 
   const stopListening = useCallback(() => {
-    recorderRef.current?.stop();   // emits buffered transcript (manual mode)
-    if (convStateRef.current === "listening") setConvState("idle");
+    recorderRef.current?.stop();
+    // onTranscript fires → handleTranscript takes over state
+    // If no speech was captured, state resets below
   }, []);
 
   // ── Session management ────────────────────────────────────────────────────
@@ -96,9 +91,8 @@ export default function SpeakingPage() {
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
   const resetSession = useCallback(() => {
-    recorderRef.current?.cancel();   // discard buffer, no emit
+    recorderRef.current?.cancel();
     stopAudio();
-    stopVAD();
     pendingEvaluateRef.current = false;
     setHistory([]);
     setTranscript("");
@@ -109,15 +103,58 @@ export default function SpeakingPage() {
     setIsExamStarted(false);
     setUserTurnCount(0);
     sessionIdRef.current = null;
-  }, [stopAudio, stopVAD]);
+  }, [stopAudio]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      stopVAD();
-      recorderRef.current?.cancel();
+  // ── Build audio URL ───────────────────────────────────────────────────────
+  const buildAudioUrl = (audioUrl?: string | null) => {
+    if (!audioUrl) return null;
+    if (audioUrl.startsWith("http")) return audioUrl;
+    return `${API_BASE_URL}${audioUrl}`;
+  };
+
+  // ── Evaluate ──────────────────────────────────────────────────────────────
+  const handleEvaluate = useCallback(async () => {
+    if (historyRef.current.length === 0) {
+      setError("No conversation to evaluate yet.");
+      return;
+    }
+    setError("");
+    setConvState("processing");
+    recorderRef.current?.cancel();
+    stopAudio();
+    try {
+      const result = await evaluateSpeaking({
+        history: historyRef.current,
+        task_type: taskType,
+        mode
+      });
+      setEvaluation(result);
+      setTimerActive(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to evaluate speaking.");
+    } finally {
+      setConvState("idle");
+    }
+  }, [taskType, mode, stopAudio]);
+
+  // ── Play examiner audio ───────────────────────────────────────────────────
+  const playAudio = useCallback((audioUrl: string, onEnded?: () => void) => {
+    if (!audioRef.current) return;
+    setConvState("speaking");
+    audioRef.current.src = audioUrl;
+    audioRef.current.onended = () => {
+      setConvState("idle");
+      onEnded?.();
     };
-  }, [stopVAD]);
+    audioRef.current.onerror = () => {
+      setConvState("idle");
+      onEnded?.();
+    };
+    audioRef.current.play().catch(() => {
+      setConvState("idle");
+      onEnded?.();
+    });
+  }, []);
 
   // ── Examiner start ────────────────────────────────────────────────────────
   const startExaminer = useCallback(async () => {
@@ -138,25 +175,24 @@ export default function SpeakingPage() {
       setHistory([assistantMessage]);
 
       const audioUrl = buildAudioUrl(response.audio_url);
-      if (audioUrl && audioRef.current) {
-        setConvState("speaking");
-        audioRef.current.src = audioUrl;
-        audioRef.current.play().catch(() => {
-          setConvState("idle");
-          if (handsFreeEnabled) window.setTimeout(() => startListening(), 800);
+      if (audioUrl) {
+        playAudio(audioUrl, () => {
+          // After examiner finishes: auto-listen only in hands-free mode
+          if (handsFreeEnabled) {
+            window.setTimeout(() => startListening(), 800);
+          }
         });
-        // No VAD barge-in — examiner speaks fully
-      } else if (handsFreeEnabled) {
-        setConvState("idle");
-        window.setTimeout(() => startListening(), 800);
       } else {
         setConvState("idle");
+        if (handsFreeEnabled) {
+          window.setTimeout(() => startListening(), 800);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to start conversation.");
       setConvState("idle");
     }
-  }, [taskType, mode, hintsEnabled, handsFreeEnabled, startListening]);
+  }, [taskType, mode, hintsEnabled, handsFreeEnabled, playAudio, startListening]);
 
   const startSession = () => {
     resetSession();
@@ -169,42 +205,13 @@ export default function SpeakingPage() {
     window.setTimeout(() => void startExaminer(), 400);
   };
 
-  // ── Build audio URL ───────────────────────────────────────────────────────
-  const buildAudioUrl = (audioUrl?: string | null) => {
-    if (!audioUrl) return null;
-    if (audioUrl.startsWith("http")) return audioUrl;
-    return `${API_BASE_URL}${audioUrl}`;
-  };
-
-  // ── Evaluate ──────────────────────────────────────────────────────────────
-  const handleEvaluate = useCallback(async () => {
-    if (historyRef.current.length === 0) {
-      setError("No conversation to evaluate yet.");
-      return;
-    }
-    setError("");
-    setConvState("processing");
-    recorderRef.current?.stop();
-    stopAudio();
-    try {
-      const result = await evaluateSpeaking({
-        history: historyRef.current,
-        task_type: taskType,
-        mode
-      });
-      setEvaluation(result);
-      setTimerActive(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to evaluate speaking.");
-    } finally {
-      setConvState("idle");
-    }
-  }, [taskType, mode, stopAudio]);
-
   // ── Transcript handler ────────────────────────────────────────────────────
   const handleTranscript = useCallback(async (text: string) => {
-    if (!text) return;
-    if (userTurnCount >= MAX_EXCHANGES) return;   // cap at MAX_EXCHANGES
+    if (!text) {
+      if (convStateRef.current === "listening") setConvState("idle");
+      return;
+    }
+    if (userTurnCount >= MAX_EXCHANGES) return;
     if (mode === "exam" && !isExamStarted) {
       setError("Please start the exam first.");
       return;
@@ -224,7 +231,7 @@ export default function SpeakingPage() {
     setHistory(nextHistory);
     setConvState("processing");
 
-    // 2-second natural pause before examiner responds
+    // Natural pause before examiner responds (2s)
     await new Promise((resolve) => window.setTimeout(resolve, 2000));
 
     try {
@@ -241,48 +248,49 @@ export default function SpeakingPage() {
       setHistory((prev) => [...prev, assistantMessage]);
 
       const audioUrl = buildAudioUrl(response.audio_url);
-      if (audioUrl && audioRef.current) {
+      if (audioUrl) {
         if (isLastTurn) pendingEvaluateRef.current = true;
-        setConvState("speaking");
-        audioRef.current.src = audioUrl;
-        audioRef.current.play().catch(() => {
-          setConvState("idle");
-          if (isLastTurn) window.setTimeout(() => void handleEvaluate(), 400);
-          else if (handsFreeEnabled) window.setTimeout(() => startListening(), 800);
+        playAudio(audioUrl, () => {
+          if (pendingEvaluateRef.current) {
+            pendingEvaluateRef.current = false;
+            window.setTimeout(() => void handleEvaluate(), 400);
+          } else if (handsFreeEnabled) {
+            // Hands-free: auto-start listening after examiner finishes
+            window.setTimeout(() => startListening(), 800);
+          }
+          // Manual mode: user clicks Start Recording themselves
         });
-        // No VAD barge-in — examiner always completes speech
       } else if (isLastTurn) {
         setConvState("idle");
         window.setTimeout(() => void handleEvaluate(), 400);
-      } else if (handsFreeEnabled) {
-        setConvState("idle");
-        window.setTimeout(() => startListening(), 800);
       } else {
         setConvState("idle");
+        if (handsFreeEnabled) {
+          window.setTimeout(() => startListening(), 800);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to get examiner response.");
       setConvState("idle");
     }
   }, [mode, isExamStarted, userTurnCount, taskType, hintsEnabled, handsFreeEnabled,
-      stopAudio, handleEvaluate, startListening]);
+      stopAudio, handleEvaluate, startListening, playAudio]);
 
   const handleTimerExpire = () => {
     if (!isExamStarted) return;
     void handleEvaluate();
   };
 
-  // ── Derived state (must be defined before useMemo that references it) ──────
-  const isSessionActive = history.length > 0 || convState !== "idle";
-
   // ── Status label ──────────────────────────────────────────────────────────
   const statusLabel = useMemo(() => {
     if (mode === "exam" && !isExamStarted) return "Start the exam to begin.";
     switch (convState) {
-      case "processing": return "Examiner is thinking...";
-      case "speaking":   return "Examiner is speaking...";
-      case "listening":  return "Listening... speak now.";
-      default:           return handsFreeEnabled ? "Hands-free active — waiting." : isSessionActive ? "Tap Start Recording to answer." : "Ready.";
+      case "processing": return "Examiner is thinking…";
+      case "speaking":   return "Examiner is speaking…";
+      case "listening":  return "Listening… speak now.";
+      default:
+        if (handsFreeEnabled) return "Hands-free active — ready.";
+        return isSessionActive ? "Click Start Recording to respond." : "Ready.";
     }
   }, [convState, handsFreeEnabled, mode, isExamStarted, isSessionActive]);
 
@@ -298,8 +306,14 @@ export default function SpeakingPage() {
     speaking:   "bg-indigo-500 animate-pulse"
   };
 
+  const isRecorderDisabled =
+    convState === "processing" ||
+    convState === "speaking" ||
+    (mode === "exam" && !isExamStarted) ||
+    !!evaluation;
+
   return (
-    <AppShell title="Speaking Module" subtitle="Real-time TEF Canada speaking practice" backHref="/">
+    <AppShell title="Speaking Module" subtitle="Real-time TEF Canada speaking practice">
       <div className="space-y-6">
         {/* Mode buttons */}
         <div className="flex flex-wrap items-center gap-3">
@@ -330,9 +344,12 @@ export default function SpeakingPage() {
             Opinion (Task 2)
           </Button>
           <Button variant="secondary" onClick={resetSession}>Reset</Button>
-          <Button variant={handsFreeEnabled ? "default" : "outline"}
-            onClick={() => setHandsFreeEnabled((prev) => !prev)}>
-            Hands-Free {handsFreeEnabled ? "On" : "Off"}
+          <Button
+            variant={handsFreeEnabled ? "default" : "outline"}
+            title="Hands-free: mic auto-starts after examiner finishes. Manual: you control when to record."
+            onClick={() => setHandsFreeEnabled((prev) => !prev)}
+          >
+            {handsFreeEnabled ? "🎙 Hands-Free On" : "🎙 Hands-Free Off"}
           </Button>
         </div>
 
@@ -390,72 +407,59 @@ export default function SpeakingPage() {
                   </div>
                 </div>
 
-                {/* Audio element (hidden controls, managed programmatically) */}
-                <audio
-                  ref={audioRef}
-                  className="hidden"
-                  onPlay={() => setConvState("speaking")}
-                  onEnded={() => {
-                    stopVAD();
-                    setConvState("idle");
-                    if (pendingEvaluateRef.current) {
-                      pendingEvaluateRef.current = false;
-                      window.setTimeout(() => void handleEvaluate(), 400);
-                    } else if (handsFreeEnabled) {
-                      window.setTimeout(() => startListening(), 800);
-                    }
-                  }}
-                  onError={() => {
-                    stopVAD();
-                    setConvState("idle");
-                    if (pendingEvaluateRef.current) {
-                      pendingEvaluateRef.current = false;
-                      window.setTimeout(() => void handleEvaluate(), 400);
-                    } else if (handsFreeEnabled) {
-                      window.setTimeout(() => startListening(), 800);
-                    }
-                  }}
-                />
+                {/* Hidden audio element — managed programmatically */}
+                <audio ref={audioRef} className="hidden" />
 
-                {/* Recorder
-                    - Hands-free: built-in button shown, auto-stops after 3.5 s silence
-                    - Manual: built-in button hidden, transcript buffered until Stop is tapped */}
+                {/* ── Controls ── */}
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Stop Audio button — visible while examiner is speaking */}
+                  {convState === "speaking" && (
+                    <Button variant="secondary" onClick={stopAudio}>
+                      ⏹ Stop Audio
+                    </Button>
+                  )}
+
+                  {/* Recording controls — only in manual mode while session is active */}
+                  {!handsFreeEnabled && isSessionActive && !evaluation && convState !== "speaking" && (
+                    convState === "listening" ? (
+                      <Button
+                        variant="secondary"
+                        onClick={stopListening}
+                      >
+                        ⏹ Stop Recording
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        disabled={isRecorderDisabled}
+                        onClick={startListening}
+                      >
+                        🎤 Start Recording
+                      </Button>
+                    )
+                  )}
+                </div>
+
+                {/* SpeakingRecorder — hands-free mode only (no button rendered by default) */}
+                {/*
+                  In hands-free mode: silence detection auto-submits after 3.5s of quiet.
+                  In manual mode: hideButton=true + manualSubmit=true — parent controls everything.
+                */}
                 <SpeakingRecorder
                   ref={recorderRef}
-                  onTranscript={handleTranscript}
-                  onError={(message) => setError(message)}
-                  hideButton={!handsFreeEnabled}
+                  hideButton={true}
                   silenceTimeoutMs={handsFreeEnabled ? 3500 : 0}
                   manualSubmit={!handsFreeEnabled}
+                  onTranscript={handleTranscript}
+                  onError={(message) => setError(message)}
                   onNoSpeech={() => {
                     if (convStateRef.current === "listening") setConvState("idle");
-                    // Only auto-restart in hands-free mode
-                    if (handsFreeEnabled && convStateRef.current !== "processing" && convStateRef.current !== "speaking") {
-                      window.setTimeout(() => startListening(), 800);
-                    }
                   }}
                   onListeningChange={(listening) => {
                     if (!listening && convStateRef.current === "listening") setConvState("idle");
                   }}
-                  isDisabled={convState === "processing" || (mode === "exam" && !isExamStarted) || !!evaluation}
+                  isDisabled={isRecorderDisabled}
                 />
-
-                {/* Manual mode controls — single button, shown only when session is active */}
-                {!handsFreeEnabled && isSessionActive && !evaluation && (
-                  convState === "listening" ? (
-                    <Button variant="secondary" onClick={stopListening}>
-                      Stop Recording
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="default"
-                      disabled={convState === "processing" || convState === "speaking" || (mode === "exam" && !isExamStarted)}
-                      onClick={startListening}
-                    >
-                      Start Recording
-                    </Button>
-                  )
-                )}
 
                 <p className="text-sm text-slate-500">{statusLabel}</p>
               </CardContent>
@@ -463,7 +467,7 @@ export default function SpeakingPage() {
 
             <SpeakingChat
               history={history}
-              isThinking={isThinking}
+              isThinking={convState === "processing"}
               currentTranscript={transcript}
               exchangeCount={userTurnCount}
               maxExchanges={MAX_EXCHANGES}
@@ -485,9 +489,11 @@ export default function SpeakingPage() {
 
             <Card className="border-slate-200 shadow-sm">
               <CardContent className="space-y-3 p-6">
-                <Button onClick={() => void handleEvaluate()}
-                  disabled={convState === "processing" || history.length === 0}>
-                  {convState === "processing" ? "Evaluating..." : "End & Evaluate"}
+                <Button
+                  onClick={() => void handleEvaluate()}
+                  disabled={convState === "processing" || history.length === 0}
+                >
+                  {convState === "processing" ? "Evaluating…" : "End & Evaluate"}
                 </Button>
                 <p className="text-sm text-slate-500">
                   End the conversation and get feedback on fluency, grammar, and interaction.
@@ -501,9 +507,9 @@ export default function SpeakingPage() {
                   <h3 className="text-base font-semibold text-slate-900">Evaluation</h3>
                   <div className="grid gap-3 sm:grid-cols-2">
                     {[
-                      { label: "Fluency", val: evaluation.fluency },
-                      { label: "Grammar", val: evaluation.grammar },
-                      { label: "Vocabulary", val: evaluation.vocabulary },
+                      { label: "Fluency",     val: evaluation.fluency },
+                      { label: "Grammar",     val: evaluation.grammar },
+                      { label: "Vocabulary",  val: evaluation.vocabulary },
                       { label: "Interaction", val: evaluation.interaction }
                     ].map(({ label, val }) => (
                       <div key={label} className="rounded-xl bg-slate-50 p-3">

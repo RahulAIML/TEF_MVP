@@ -113,7 +113,7 @@ export default function DashboardPage() {
           { label: "Reading", val: r },
           { label: "Listening", val: l },
           { label: "Writing", val: w },
-          { label: "Practice Lab", val: le }
+          { label: "AI Learn", val: le }
         ].filter((m) => m.val > 0).sort((a, b) => a.val - b.val);
         return { overall, totalSessions, weakest: weakModules[0] ?? null };
       })()
@@ -190,7 +190,7 @@ export default function DashboardPage() {
                   <ModuleRow label="Writing" score={summary.writing.average_score} max={10}
                     sessions={summary.writing.recent_submissions.length} href="/writing"
                     icon={PenSquare} barColor="bg-amber-500" />
-                  <ModuleRow label="Practice Lab" score={summary.learning.average_score} max={10}
+                  <ModuleRow label="AI Learn" score={summary.learning.average_score} max={10}
                     sessions={summary.learning.recent_sessions.length} href="/learn"
                     icon={Sparkles} barColor="bg-indigo-500" />
                 </CardContent>
@@ -220,13 +220,13 @@ export default function DashboardPage() {
                   {summary.writing.average_score < 6 && summary.writing.recent_submissions.length > 0 && (
                     <div className="flex gap-3 rounded-xl bg-amber-50 p-3">
                       <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
-                      <p className="text-xs text-amber-700">Writing score under 6/10 — use Practice Lab to work on sentence structure and grammar.</p>
+                      <p className="text-xs text-amber-700">Writing score under 6/10 — use AI Learn to practice sentence structure.</p>
                     </div>
                   )}
                   {summary.learning.recent_sessions.length === 0 && (
                     <div className="flex gap-3 rounded-xl bg-indigo-50 p-3">
                       <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-indigo-500" />
-                      <p className="text-xs text-indigo-700">You have not used Practice Lab yet — paste any French text to get structured exercises and feedback.</p>
+                      <p className="text-xs text-indigo-700">You have not tried AI Learn yet — paste any French text to generate personalised exercises.</p>
                     </div>
                   )}
                   {overview.overall >= 75 && (
