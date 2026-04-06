@@ -11,3 +11,9 @@ __pycache__/
 backend/.venv/
 frontend/.vercel/
 backend/tef.db
+backend/data/audio/
+.claude/
+documents/
+frontend/tsconfig.tsbuildinfo
+modelAvaibility.py
+*.wav
