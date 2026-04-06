@@ -30,7 +30,7 @@ export default function TextExplanationCard({ entry }: TextExplanationCardProps)
           <div className="flex items-center justify-between">
             <p className="font-medium text-slate-900">Translation</p>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               className="h-auto px-2 py-0.5 text-xs text-slate-500 hover:text-slate-800"
               onClick={() => setShowTranslation((p) => !p)}
