@@ -821,6 +821,17 @@ Rules:
   }
 
 
+def translate_passage(text: str) -> str:
+  """Translate French text to English."""
+  clean_text = text.strip()
+  prompt = f"""Translate the following French text to English. Output only the English translation — no explanations, no labels, no extra text.
+
+French text:
+{clean_text}
+"""
+  return _generate_text(prompt, temperature=0.2).strip()
+
+
 def explain_word(word: str) -> WordMeaningResponse:
   clean_word = word.strip()
   prompt = f"""

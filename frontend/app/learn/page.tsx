@@ -10,6 +10,7 @@ import {
   evaluateLearnAnswer,
   generateMoreExercises,
   saveLearnSession,
+  translatePassage,
   uploadLearnFile
 } from "@/services/api";
 import type {
@@ -42,6 +43,10 @@ export default function LearnPage() {
   const [sourceType, setSourceType] = useState<LearnSourceType>("text");
   const [exercises, setExercises] = useState<ExerciseState[]>([]);
   const [sessionSaved, setSessionSaved] = useState(false);
+  const [passageOpen, setPassageOpen] = useState(true);
+  const [translation, setTranslation] = useState("");
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Analyze ───────────────────────────────────────────────────────────────
@@ -59,6 +64,9 @@ export default function LearnPage() {
         evaluation: null,
         isEvaluating: false
       })));
+      setTranslation("");
+      setShowTranslation(false);
+      setPassageOpen(true);
       setPageState("content");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed. Please try again.");
@@ -177,6 +185,24 @@ export default function LearnPage() {
     }
   };
 
+  const handleTranslate = async () => {
+    if (translation) {
+      // Already translated — just toggle visibility
+      setShowTranslation((p) => !p);
+      return;
+    }
+    setIsTranslating(true);
+    try {
+      const result = await translatePassage(inputText);
+      setTranslation(result);
+      setShowTranslation(true);
+    } catch {
+      setError("Translation failed. Please try again.");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
   const handleReset = () => {
     setPageState("input");
     setContent(null);
@@ -186,6 +212,9 @@ export default function LearnPage() {
     setSessionSaved(false);
     setSourceType("text");
     setTab("text");
+    setTranslation("");
+    setShowTranslation(false);
+    setPassageOpen(true);
   };
 
   // ── Computed ──────────────────────────────────────────────────────────────
@@ -352,6 +381,47 @@ export default function LearnPage() {
             {/* ── ALL EXERCISES (shown at once) ───────────────────────────────── */}
             {(pageState === "exercises" || pageState === "complete") && (
               <div className="space-y-6">
+
+                {/* ── Original passage (collapsible, with translate toggle) ── */}
+                <div className="overflow-hidden rounded-2xl border border-indigo-200 bg-indigo-50 shadow-sm">
+                  <div className="flex w-full items-center justify-between px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-widest text-indigo-600">
+                        Original Passage
+                      </span>
+                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700">
+                        Reference
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => void handleTranslate()}
+                        disabled={isTranslating}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-indigo-500 hover:bg-indigo-100 hover:text-indigo-700 transition disabled:opacity-50"
+                      >
+                        🌐 {isTranslating ? "Translating…" : showTranslation ? "Hide Translation" : "Translate"}
+                      </button>
+                      <button
+                        onClick={() => setPassageOpen((p) => !p)}
+                        className="text-[11px] text-indigo-400 hover:text-indigo-600 px-2 py-1 rounded-lg hover:bg-indigo-100 transition"
+                      >
+                        {passageOpen ? "▲ Hide" : "▼ Show"}
+                      </button>
+                    </div>
+                  </div>
+                  {passageOpen && (
+                    <div className="border-t border-indigo-100 px-5 py-4 space-y-3">
+                      <p className="text-sm leading-7 text-slate-800 whitespace-pre-wrap">{inputText}</p>
+                      {showTranslation && translation && (
+                        <div className="rounded-xl border border-indigo-200 bg-white px-4 py-3">
+                          <p className="mb-1 text-[10px] font-semibold uppercase text-indigo-400">English Translation</p>
+                          <p className="text-sm leading-7 text-slate-700 whitespace-pre-wrap">{translation}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 {/* Progress bar */}
                 <div className="flex items-center gap-3">
                   <div className="flex flex-1 gap-1">

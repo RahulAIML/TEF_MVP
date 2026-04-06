@@ -168,6 +168,17 @@ export async function explainText(
   return parseResponse<ExplainTextResponse>(res);
 }
 
+export async function translatePassage(text: string): Promise<string> {
+  const res = await fetch(`${API_BASE_URL}/translate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ text }),
+    cache: "no-store"
+  });
+  const data = await parseResponse<{ translation: string }>(res);
+  return data.translation;
+}
+
 export async function explainWord(
   payload: WordMeaningRequest
 ): Promise<WordMeaningResponse> {
