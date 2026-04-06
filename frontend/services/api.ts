@@ -333,6 +333,20 @@ export async function generateMoreExercises(
   return parseResponse<LearnExercise[]>(res);
 }
 
+export async function chatWithAI(payload: {
+  message: string;
+  context?: string;
+  language?: string;
+}): Promise<{ reply: string }> {
+  const res = await fetch(`${API_BASE_URL}/ai-chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+    cache: "no-store"
+  });
+  return parseResponse<{ reply: string }>(res);
+}
+
 export async function saveLearnSession(
   payload: LearnSaveSessionRequest
 ): Promise<LearnSessionSummary> {

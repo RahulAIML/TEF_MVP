@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TEF Canada Training Platform &bull; Technical Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2&bull;family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f8fafc; color: #0f172a; line-height: 1.5; }
+    .page { max-width: 1100px; margin: 24px auto; background: #ffffff; padding: 48px; box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08); border-radius: 24px; }
+    .page-break { page-break-after: always; }
+    .card { border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; background: #ffffff; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04); }
+    .pill { background: #eef2ff; color: #4338ca; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    @media print { .page { box-shadow: none; margin: 0; border-radius: 0; } }
+  </style>
+</head>
+<body class="bg-slate-50">
+
+  <!-- PAGE 1 -->
+  <section class="page page-break">
+    <div class="flex items-center justify-between mb-14">
+      <div class="text-sm font-semibold tracking-widest text-slate-400 uppercase">TEF Canada Training Platform</div>
+      <span class="pill">Technical Report</span>
+    </div>
+
+    <header class="space-y-6">
+      <h1 class="text-4xl font-bold leading-tight text-slate-900">
+        TEF Canada Training Platform &bull; Technical Report
+      </h1>
+      <p class="text-lg text-slate-600">Scope: Reading, Listening, Passage Analysis, and Performance Dashboard</p>
+      <p class="text-sm text-slate-500">Version: 2026.03 &bull; Environment: Web (Next.js + FastAPI)</p>
+    </header>
+
+    <div class="mt-10 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="card">
+        <h2 class="text-lg font-semibold text-slate-900">System Summary</h2>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; End&bull;to&bull;end TEF preparation system focused on Reading and Listening modules.</li>
+          <li>&bull; AI&bull;assisted content generation with validated question formats.</li>
+          <li>&bull; Structured mock exams and single&bull;item practice flows.</li>
+          <li>&bull; Analytical dashboard for accuracy trends and weak&bull;area detection.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h2 class="text-lg font-semibold text-slate-900">Architecture Overview</h2>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; Frontend: Next.js 14, TailwindCSS, shadcn/ui, Chart.js.</li>
+          <li>&bull; Backend: FastAPI with JWT auth and PostgreSQL persistence.</li>
+          <li>&bull; AI: Gemini (content + fallback TTS), ElevenLabs (primary TTS).</li>
+          <li>&bull; Static audio hosting served by FastAPI at <span class="mono">/audio</span>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="mt-6 card">
+      <h2 class="text-lg font-semibold text-slate-900">Key Non&bull;Functional Requirements</h2>
+      <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-600">
+        <ul class="space-y-2">
+          <li>&bull; Consistent latency for question generation</li>
+          <li>&bull; Deterministic response formats with validation</li>
+          <li>&bull; Reliable audio delivery with fallback logic</li>
+        </ul>
+        <ul class="space-y-2">
+          <li>&bull; High availability on Render</li>
+          <li>&bull; Modular, reusable UI components</li>
+          <li>&bull; Clean, accessible interfaces</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE 2 -->
+  <section class="page page-break">
+    <div class="flex items-center justify-between mb-10">
+      <h2 class="text-3xl font-semibold text-slate-900">Functional Modules</h2>
+      <span class="pill">Features & Flows</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Reading Module</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; Mock Exam: 40 questions, 60&bull;minute timer</li>
+          <li>&bull; Navigator: jump to any question</li>
+          <li>&bull; Prefetch: next 5 questions generated in background</li>
+          <li>&bull; Text Helper: explain selected text via <span class="mono">/explain-text</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Listening Module</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; Mock Exam: 40 questions, 60&bull;minute timer</li>
+          <li>&bull; Practice Mode: single question with immediate explanation</li>
+          <li>&bull; Audio controls: play, pause, stop, speed (0.75&bull;&bull;1.5&bull;)</li>
+          <li>&bull; Transcript: word&bull;level highlighting with auto&bull;scroll</li>
+          <li>&bull; Text Helper: transcript selection &bull; explain</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Passage Analysis</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; 10&bull;question passage quiz generator</li>
+          <li>&bull; Highlighted text auto&bull;fills helper input</li>
+          <li>&bull; Supports full paragraph analysis</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Performance Dashboard</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; Line chart: accuracy trend</li>
+          <li>&bull; Bar chart: score normalized to 40</li>
+          <li>&bull; Pie chart: weak areas distribution</li>
+        </ul>
+      </div>
+
+      <div class="card md:col-span-2">
+        <h3 class="text-lg font-semibold text-slate-900">Authentication & Data</h3>
+        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-slate-600">
+          <ul class="space-y-2">
+            <li>&bull; JWT&bull;based authentication</li>
+            <li>&bull; Exam attempts stored in PostgreSQL</li>
+            <li>&bull; Error type aggregation for weak&bull;area analysis</li>
+          </ul>
+          <ul class="space-y-2">
+            <li>&bull; Session&bull;scoped caching to avoid duplicates</li>
+            <li>&bull; Full audit of question metadata</li>
+            <li>&bull; Safe retries on AI generation</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PAGE 3 -->
+  <section class="page">
+    <div class="flex items-center justify-between mb-10">
+      <h2 class="text-3xl font-semibold text-slate-900">Technical Interfaces</h2>
+      <span class="pill">APIs & Integration</span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Core Endpoints</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li><span class="mono">POST /generate-question</span> &bull; reading question</li>
+          <li><span class="mono">POST /generate-passage-quiz</span> &bull; passage + 10 Qs</li>
+          <li><span class="mono">POST /generate-listening-question</span> &bull; script + audio</li>
+          <li><span class="mono">POST /explain-text</span> &bull; text explanation</li>
+          <li><span class="mono">POST /submit-exam</span> &bull; submit mock exam</li>
+          <li><span class="mono">GET /dashboard/summary</span> &bull; metrics</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Audio Generation Pipeline</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; Script generated via Gemini</li>
+          <li>&bull; Primary TTS: ElevenLabs (MP3)</li>
+          <li>&bull; Fallback TTS: Gemini (WAV)</li>
+          <li>&bull; Audio saved to local store and served at <span class="mono">/audio</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Deployment & Configuration</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; Backend: Render web service</li>
+          <li>&bull; Frontend: Render static / web service</li>
+          <li>&bull; Env: <span class="mono">GEMINI_API_KEY</span>, <span class="mono">ELEVENLABS_API_KEY</span>, <span class="mono">ELEVENLABS_VOICE_ID</span></li>
+          <li>&bull; Optional: <span class="mono">GEMINI_TTS_MODEL</span>, <span class="mono">AUDIO_STORAGE_PATH</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3 class="text-lg font-semibold text-slate-900">Quality Controls</h3>
+        <ul class="mt-4 space-y-2 text-slate-600">
+          <li>&bull; Response schema validation via Pydantic</li>
+          <li>&bull; Duplicate&bull;avoidance using content hashes</li>
+          <li>&bull; Retry policy on AI generation failures</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</body>
+</html>
