@@ -7,6 +7,9 @@ dist/
 __pycache__/
 .env
 .env.local
+.env.*
+backend/.env
+frontend/.env
 .venv/
 backend/.venv/
 frontend/.vercel/
